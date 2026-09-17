@@ -1,0 +1,1 @@
+CREATE SEQUENCE IF NOT EXISTS request_reference_seq START WITH 1001;

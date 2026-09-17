@@ -1,0 +1,172 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountType {
+  individual
+  business
+}
+
+enum SourceType {
+  link
+  photo
+  text
+}
+
+enum Flexibility {
+  exact
+  flexible
+}
+
+enum RequestStatus {
+  submitted
+  quoted
+  approved_paid
+  procured
+  in_transit_china_warehouse
+  in_transit_freight
+  arrived_nigeria_warehouse
+  delivered
+}
+
+enum QuoteStatus {
+  sent
+  accepted
+  rejected
+}
+
+enum PaymentStatus {
+  unpaid
+  paid
+  failed
+}
+
+enum PaymentGateway {
+  paystack
+  flutterwave
+}
+
+enum NotificationChannel {
+  whatsapp
+  sms
+  email
+}
+
+enum OpsRole {
+  admin
+  agent
+}
+
+enum CredentialKind {
+  requester
+  ops
+}
+
+model User {
+  id          String      @id @default(cuid())
+  name        String
+  email       String      @unique
+  phone       String
+  accountType AccountType
+  createdAt   DateTime    @default(now())
+  credential  Credential?
+  requests    Request[]
+}
+
+model OpsUser {
+  id               String       @id @default(cuid())
+  name             String
+  email            String       @unique
+  role             OpsRole
+  credential       Credential?
+  assignedRequests Request[]
+  quotes           Quote[]
+}
+
+model Credential {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String
+  kind         CredentialKind
+  userId       String?        @unique
+  opsUserId    String?        @unique
+  user         User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opsUser      OpsUser?       @relation(fields: [opsUserId], references: [id], onDelete: Cascade)
+}
+
+model Request {
+  id                  String            @id @default(cuid())
+  reference           String            @unique
+  userId              String
+  sourceType          SourceType
+  sourceValue         String            @db.Text
+  quantity            Int
+  budgetMax           Decimal           @db.Decimal(14, 2)
+  timeline            String
+  qualityNotes        String            @db.Text
+  flexibility         Flexibility
+  status              RequestStatus     @default(submitted)
+  assignedOpsUserId   String?
+  marketplaceEligible Boolean?
+  createdAt           DateTime          @default(now())
+  user                User              @relation(fields: [userId], references: [id])
+  assignedOpsUser     OpsUser?          @relation(fields: [assignedOpsUserId], references: [id])
+  quotes              Quote[]
+  payment             Payment?
+  history             StatusUpdate[]
+  notifications       Notification[]
+}
+
+model Quote {
+  id              String      @id @default(cuid())
+  requestId       String
+  agentId         String
+  supplierRef     String
+  unitPrice       Decimal     @db.Decimal(14, 2)
+  moq             Int
+  productCost     Decimal     @db.Decimal(14, 2)
+  freightEstimate Decimal     @db.Decimal(14, 2)
+  serviceFee      Decimal     @db.Decimal(14, 2)
+  totalCost       Decimal     @db.Decimal(14, 2)
+  leadTime        String
+  isAlternative   Boolean
+  status          QuoteStatus @default(sent)
+  createdAt       DateTime    @default(now())
+  request         Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  agent           OpsUser     @relation(fields: [agentId], references: [id])
+}
+
+model Payment {
+  id         String          @id @default(cuid())
+  requestId  String          @unique
+  amount     Decimal         @db.Decimal(14, 2)
+  gateway    PaymentGateway
+  gatewayRef String
+  status     PaymentStatus
+  paidAt     DateTime?
+  request    Request         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+model StatusUpdate {
+  id        String        @id @default(cuid())
+  requestId String
+  status    RequestStatus
+  note      String
+  updatedBy String
+  createdAt DateTime      @default(now())
+  request   Request       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  requestId String
+  channel   NotificationChannel
+  message   String
+  createdAt DateTime            @default(now())
+  request   Request             @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
