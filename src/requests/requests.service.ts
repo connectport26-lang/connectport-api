@@ -618,13 +618,30 @@ export class RequestsService {
   async listOpsUsers() {
     const users = await this.prisma.opsUser.findMany({
       orderBy: { name: 'asc' },
+      include: { credential: { select: { disabled: true } } },
     });
     return users.map((user) => ({
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
+      disabled: user.credential?.disabled ?? false,
     }));
+  }
+
+  async requestStats() {
+    const [grouped, unassigned] = await Promise.all([
+      this.prisma.request.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      }),
+      this.prisma.request.count({ where: { assignedOpsUserId: null } }),
+    ]);
+    const byStatus: Record<string, number> = {};
+    for (const row of grouped) {
+      byStatus[row.status] = row._count._all;
+    }
+    return { byStatus, unassigned, total: Object.values(byStatus).reduce((a, b) => a + b, 0) };
   }
 
   async listRequests(filters: RequestFiltersDto) {
@@ -633,10 +650,16 @@ export class RequestsService {
       filters.status && filters.status !== 'all' ? filters.status : undefined;
     const take = Math.min(Math.max(filters.limit ?? 50, 1), 100);
     const cursor = filters.cursor?.trim();
+    const assignee = filters.assignee?.trim();
 
     const rows = await this.prisma.request.findMany({
       where: {
         ...(status ? { status } : {}),
+        ...(assignee === 'unassigned'
+          ? { assignedOpsUserId: null }
+          : assignee
+            ? { assignedOpsUserId: assignee }
+            : {}),
         ...(search
           ? {
               OR: [

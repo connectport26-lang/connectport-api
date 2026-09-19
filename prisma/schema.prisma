@@ -143,6 +143,7 @@ model Credential {
   passwordHash String
   kind         CredentialKind
   tokenVersion Int            @default(0)
+  disabled     Boolean        @default(false)
   userId       String?        @unique
   opsUserId    String?        @unique
   user         User?          @relation(fields: [userId], references: [id], onDelete: Cascade)

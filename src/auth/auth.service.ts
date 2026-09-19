@@ -275,6 +275,10 @@ export class AuthService {
       throw new UnauthorizedException('Incorrect email or password.');
     }
 
+    if (credential.disabled) {
+      throw new UnauthorizedException('This account has been disabled.');
+    }
+
     await this.clearLoginFailures(email);
 
     if (credential.kind === 'ops' && credential.opsUser) {

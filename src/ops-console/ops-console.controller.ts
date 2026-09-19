@@ -12,11 +12,14 @@ import {
   RequireOps,
   RequireOpsAdmin,
 } from '../common/decorators/auth.decorators';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthUser } from '../common/types/auth-user';
 import {
   ActivityQueryDto,
   CreateOpsAgentDto,
   CreateTeamDto,
   CustomerQueryDto,
+  SetAgentDisabledDto,
   TeamMemberDto,
   UpdateMarketplaceDto,
 } from './dto/ops-console.dto';
@@ -80,5 +83,15 @@ export class OpsConsoleController {
   @RequireOpsAdmin()
   createAgent(@Body() body: CreateOpsAgentDto) {
     return this.console.createAgent(body);
+  }
+
+  @Patch('agents/:id/disabled')
+  @RequireOpsAdmin()
+  setAgentDisabled(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: SetAgentDisabledDto,
+  ) {
+    return this.console.setAgentDisabled(id, body.disabled, user.sub);
   }
 }

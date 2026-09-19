@@ -155,22 +155,6 @@ const products = [
     landingSort: 0,
     tags: ['electronic', 'speaker', 'audio', 'gadgets'],
   },
-  {
-    slug: 'modular-storage-shelf-oak',
-    name: 'Modular Storage Shelf - Oak',
-    description:
-      'Three-tier oak-look laminate shelf with steel uprights. Flat-pack furniture for home and retail fit-outs.',
-    imageUrl:
-      'https://images.unsplash.com/photo-1595428774223-ef526f69f003?w=900&q=80',
-    unitPrice: 38500,
-    moq: 10,
-    weightKg: 12.5,
-    estimatedDeliveryDays: 30,
-    availability: 'made_to_order' as const,
-    featuredOnLanding: false,
-    landingSort: 0,
-    tags: ['furniture', 'shelf', 'storage', 'home'],
-  },
 ];
 
 async function main() {

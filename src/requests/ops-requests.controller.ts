@@ -20,6 +20,11 @@ export class OpsRequestsController {
     return this.requests.listOpsUsers();
   }
 
+  @Get('requests/stats')
+  stats() {
+    return this.requests.requestStats();
+  }
+
   @Get('requests')
   list(@Query() filters: RequestFiltersDto) {
     return this.requests.listRequests(filters);

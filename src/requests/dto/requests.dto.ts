@@ -181,6 +181,11 @@ export class RequestFiltersDto {
   @IsString()
   search?: string;
 
+  /** Ops user id, or the literal "unassigned". */
+  @IsOptional()
+  @IsString()
+  assignee?: string;
+
   @IsOptional()
   @IsString()
   cursor?: string;

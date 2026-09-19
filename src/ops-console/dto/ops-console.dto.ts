@@ -70,3 +70,8 @@ export class UpdateMarketplaceDto {
   @IsBoolean()
   marketplaceEligible: boolean;
 }
+
+export class SetAgentDisabledDto {
+  @IsBoolean()
+  disabled: boolean;
+}

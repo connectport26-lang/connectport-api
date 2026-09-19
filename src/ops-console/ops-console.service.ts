@@ -179,6 +179,40 @@ export class OpsConsoleService {
       name: opsUser.name,
       email: opsUser.email,
       role: opsUser.role,
+      disabled: false,
+    };
+  }
+
+  async setAgentDisabled(
+    opsUserId: string,
+    disabled: boolean,
+    actorId: string,
+  ) {
+    if (opsUserId === actorId) {
+      throw new BadRequestException('You cannot disable your own account.');
+    }
+    const opsUser = await this.prisma.opsUser.findUnique({
+      where: { id: opsUserId },
+      include: { credential: true },
+    });
+    if (!opsUser?.credential) {
+      throw new NotFoundException('Ops user not found.');
+    }
+
+    await this.prisma.credential.update({
+      where: { id: opsUser.credential.id },
+      data: {
+        disabled,
+        ...(disabled ? { tokenVersion: { increment: 1 } } : {}),
+      },
+    });
+
+    return {
+      id: opsUser.id,
+      name: opsUser.name,
+      email: opsUser.email,
+      role: opsUser.role,
+      disabled,
     };
   }
 

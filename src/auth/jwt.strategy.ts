@@ -48,6 +48,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       if (!credential?.opsUser) {
         throw new UnauthorizedException();
       }
+      if (credential.disabled) {
+        throw new UnauthorizedException('This account has been disabled.');
+      }
       if ((payload.tv ?? 0) !== credential.tokenVersion) {
         throw new UnauthorizedException('Session revoked.');
       }
