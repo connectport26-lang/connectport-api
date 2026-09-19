@@ -8,7 +8,8 @@ datasource db {
 }
 
 enum AccountType {
-  individual
+  personal
+  starting_business
   business
 }
 
@@ -16,6 +17,17 @@ enum SourceType {
   link
   photo
   text
+}
+
+enum RequestChannel {
+  sourcing
+  catalog
+}
+
+enum CancelReason {
+  out_of_stock
+  customer_request
+  other
 }
 
 enum Flexibility {
@@ -48,6 +60,7 @@ enum RequestStatus {
   in_transit_freight
   arrived_nigeria_warehouse
   delivered
+  cancelled
 }
 
 enum QuoteStatus {
@@ -60,6 +73,8 @@ enum PaymentStatus {
   unpaid
   paid
   failed
+  refunded
+  refund_pending
 }
 
 enum PaymentGateway {
@@ -76,6 +91,28 @@ enum NotificationChannel {
 enum OpsRole {
   admin
   agent
+}
+
+enum FeeMode {
+  fixed
+  percent
+}
+
+enum FindMatchType {
+  exact
+  alternative
+}
+
+enum FindStatus {
+  draft
+  pending_review
+  sent
+  rejected
+}
+
+enum FindMediaKind {
+  image
+  video
 }
 
 enum CredentialKind {
@@ -108,14 +145,93 @@ model User {
 }
 
 model OpsUser {
-  id               String       @id @default(cuid())
-  name             String
-  email            String       @unique
-  role             OpsRole
-  credential       Credential?
-  assignedRequests Request[]
-  quotes           Quote[]
-  teamMemberships  TeamMember[]
+  id                  String        @id @default(cuid())
+  name                String?
+  email               String        @unique
+  phone               String?
+  /// Legacy enum kept during transition; prefer roleRelation.
+  role                OpsRole       @default(agent)
+  roleId              String?
+  mustChangePassword  Boolean       @default(false)
+  profileCompletedAt  DateTime?
+  credential          Credential?
+  roleRelation        Role?         @relation(fields: [roleId], references: [id])
+  assignedRequests    Request[]
+  quotes              Quote[]
+  finds               ProductFind[] @relation("FindAgent")
+  reviewedFinds       ProductFind[] @relation("FindReviewer")
+  teamMemberships     TeamMember[]
+
+  @@index([roleId])
+}
+
+model Role {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  permissions String[]
+  isSystem    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  opsUsers    OpsUser[]
+}
+
+model PricingConfig {
+  id                 String   @id @default("default")
+  shippingRatePerKg  Decimal  @db.Decimal(14, 2)
+  agentFeeMode       FeeMode  @default(percent)
+  agentFeeValue      Decimal  @db.Decimal(14, 2)
+  agentFeeMin        Decimal? @db.Decimal(14, 2)
+  agentFeeMax        Decimal? @db.Decimal(14, 2)
+  miscMode           FeeMode  @default(fixed)
+  miscValue          Decimal  @db.Decimal(14, 2)
+  miscMin            Decimal? @db.Decimal(14, 2)
+  miscMax            Decimal? @db.Decimal(14, 2)
+  profitMode         FeeMode  @default(percent)
+  profitValue        Decimal  @db.Decimal(14, 2)
+  profitMin          Decimal  @db.Decimal(14, 2)
+  profitMax          Decimal  @db.Decimal(14, 2)
+  serviceLabel       String   @default("Service & logistics")
+  updatedAt          DateTime @updatedAt
+}
+
+model ProductFind {
+  id            String         @id @default(cuid())
+  requestId     String
+  agentId       String
+  matchType     FindMatchType
+  title         String
+  notes         String         @db.Text
+  supplierCost  Decimal        @db.Decimal(14, 2)
+  weightKg      Decimal        @db.Decimal(10, 3)
+  moq           Int
+  leadTime      String
+  status        FindStatus     @default(draft)
+  quoteId       String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewNote    String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  request       Request        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  agent         OpsUser        @relation("FindAgent", fields: [agentId], references: [id])
+  reviewedBy    OpsUser?       @relation("FindReviewer", fields: [reviewedById], references: [id])
+  media         ProductFindMedia[]
+
+  @@index([requestId])
+  @@index([agentId])
+  @@index([reviewedById])
+}
+
+model ProductFindMedia {
+  id        String        @id @default(cuid())
+  findId    String
+  kind      FindMediaKind
+  url       String
+  createdAt DateTime      @default(now())
+  find      ProductFind   @relation(fields: [findId], references: [id], onDelete: Cascade)
+
+  @@index([findId])
 }
 
 model Team {
@@ -168,6 +284,7 @@ model Request {
   id                  String            @id @default(cuid())
   reference           String            @unique
   userId              String
+  channel             RequestChannel    @default(sourcing)
   sourceType          SourceType
   sourceValue         String            @db.Text
   quantity            Int
@@ -182,6 +299,8 @@ model Request {
   needByDate          DateTime?
   needByTimeframe     String?
   status              RequestStatus     @default(submitted)
+  cancelReason        CancelReason?
+  cancelNote          String?
   assignedOpsUserId   String?
   teamId              String?
   marketplaceEligible Boolean?
@@ -194,10 +313,12 @@ model Request {
   history             StatusUpdate[]
   notifications       Notification[]
   references          RequestReference[]
+  finds               ProductFind[]
 
   @@index([teamId])
   @@index([userId])
   @@index([status])
+  @@index([channel])
   @@index([createdAt])
   @@index([assignedOpsUserId])
 }
@@ -236,14 +357,16 @@ model Quote {
 }
 
 model Payment {
-  id         String          @id @default(cuid())
-  requestId  String          @unique
-  amount     Decimal         @db.Decimal(14, 2)
-  gateway    PaymentGateway
-  gatewayRef String          @unique
-  status     PaymentStatus
-  paidAt     DateTime?
-  request    Request         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  id          String          @id @default(cuid())
+  requestId   String          @unique
+  amount      Decimal         @db.Decimal(14, 2)
+  gateway     PaymentGateway
+  gatewayRef  String          @unique
+  status      PaymentStatus
+  paidAt      DateTime?
+  refundRef   String?
+  refundedAt  DateTime?
+  request     Request         @relation(fields: [requestId], references: [id], onDelete: Cascade)
 }
 
 model StatusUpdate {

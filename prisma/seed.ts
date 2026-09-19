@@ -20,6 +20,8 @@ async function main() {
   await prisma.notification.deleteMany();
   await prisma.statusUpdate.deleteMany();
   await prisma.payment.deleteMany();
+  await prisma.productFindMedia.deleteMany();
+  await prisma.productFind.deleteMany();
   await prisma.quote.deleteMany();
   await prisma.request.deleteMany();
   await prisma.product.deleteMany();
@@ -29,6 +31,78 @@ async function main() {
   await prisma.credential.deleteMany();
   await prisma.user.deleteMany();
   await prisma.opsUser.deleteMany();
+
+  const ALL_PERMS = [
+    'queue.view',
+    'queue.claim',
+    'finds.submit',
+    'finds.approve',
+    'catalog.manage',
+    'customers.view',
+    'agents.invite',
+    'roles.manage',
+    'pricing.manage',
+    'teams.manage',
+    'activity.view',
+  ];
+
+  await prisma.role.upsert({
+    where: { slug: 'admin' },
+    create: {
+      id: 'role_admin',
+      name: 'Admin',
+      slug: 'admin',
+      description: 'Full console access',
+      permissions: ALL_PERMS,
+      isSystem: true,
+    },
+    update: { permissions: ALL_PERMS, isSystem: true },
+  });
+  await prisma.role.upsert({
+    where: { slug: 'agent' },
+    create: {
+      id: 'role_agent',
+      name: 'Agent',
+      slug: 'agent',
+      description: 'Queue and sourcing finds',
+      permissions: [
+        'queue.view',
+        'queue.claim',
+        'finds.submit',
+        'activity.view',
+      ],
+      isSystem: true,
+    },
+    update: {
+      permissions: [
+        'queue.view',
+        'queue.claim',
+        'finds.submit',
+        'activity.view',
+      ],
+      isSystem: true,
+    },
+  });
+
+  await prisma.pricingConfig.upsert({
+    where: { id: 'default' },
+    create: {
+      id: 'default',
+      shippingRatePerKg: 4500,
+      agentFeeMode: 'percent',
+      agentFeeValue: 5,
+      agentFeeMin: 2000,
+      agentFeeMax: 50000,
+      miscMode: 'fixed',
+      miscValue: 5000,
+      profitMode: 'percent',
+      profitValue: 8,
+      profitMin: 25000,
+      profitMax: 350000,
+      serviceLabel: 'Service & logistics',
+    },
+    update: {},
+  });
 
   await prisma.$executeRawUnsafe(
     `CREATE SEQUENCE IF NOT EXISTS request_reference_seq START WITH 1001`,
@@ -169,7 +243,7 @@ async function main() {
         name: 'Ada Okonkwo',
         email: 'ada@example.com',
         phone: '+2348011111111',
-        accountType: 'individual',
+        accountType: 'personal',
         createdAt: new Date('2026-08-12T09:00:00.000Z'),
       },
       {
@@ -190,12 +264,16 @@ async function main() {
         name: 'Korede',
         email: ADMIN_EMAIL,
         role: 'admin',
+        roleId: 'role_admin',
+        profileCompletedAt: new Date(),
       },
       {
         id: 'ops_chioma',
         name: 'Chioma Eze',
         email: 'chioma@connectport.ng',
         role: 'agent',
+        roleId: 'role_agent',
+        profileCompletedAt: new Date(),
       },
     ],
   });

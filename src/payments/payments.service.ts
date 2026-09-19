@@ -38,7 +38,7 @@ export class PaymentsService {
     if (!this.isPaystackConfigured()) {
       if (isProduction(this.config)) {
         throw new ServiceUnavailableException(
-          'Payments are temporarily unavailable. Paystack is not configured.',
+          'Payments are temporarily unavailable.',
         );
       }
       const detail = await this.requests.payQuote(userId, requestId, quoteId);
@@ -54,6 +54,9 @@ export class PaymentsService {
     if (detail.request.status === 'approved_paid') {
       return { mode: 'paystack', detail };
     }
+    if (detail.request.status === 'cancelled') {
+      throw new BadRequestException('This order was cancelled.');
+    }
     if (detail.request.status !== 'quoted') {
       throw new BadRequestException('This quote can no longer be paid.');
     }
@@ -63,7 +66,11 @@ export class PaymentsService {
     const reference = `cp_${requestId.slice(-8)}_${quoteId.slice(-8)}_${Date.now()}`;
     const callbackUrl =
       this.config.get<string>('PAYSTACK_CALLBACK_URL')?.trim() ||
-      `${(this.config.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '')}/quotes/${quoteId}`;
+      `${(this.config.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '')}${
+        detail.request.channel === 'catalog'
+          ? `/orders/${requestId}`
+          : `/quotes/${quoteId}`
+      }`;
 
     const response = await fetch(
       'https://api.paystack.co/transaction/initialize',
@@ -92,7 +99,7 @@ export class PaymentsService {
 
     if (!response.ok || !json.status || !json.data?.authorization_url) {
       throw new BadRequestException(
-        json.message || 'Could not start Paystack checkout.',
+        json.message || 'Could not start checkout. Try again.',
       );
     }
 
@@ -123,7 +130,7 @@ export class PaymentsService {
   async verifyReference(reference: string, callerUserId: string) {
     const secret = this.config.get<string>('PAYSTACK_SECRET_KEY')?.trim();
     if (!secret) {
-      throw new BadRequestException('Paystack is not configured.');
+      throw new BadRequestException('Payments are temporarily unavailable.');
     }
 
     const response = await fetch(

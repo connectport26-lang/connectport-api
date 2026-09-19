@@ -1,3 +1,5 @@
+import type { EmailDetailRow } from './mail.context';
+
 export function brandedEmailHtml(input: {
   headline: string;
   body: string;
@@ -5,12 +7,51 @@ export function brandedEmailHtml(input: {
   ctaUrl?: string;
   /** Optional large OTP / code block */
   code?: string;
+  /** Short highlighted needs blurb (already truncated by caller) */
+  snippet?: string;
+  /** Structured request context rows */
+  details?: EmailDetailRow[];
 }) {
   const codeBlock = input.code
     ? `<p style="margin:24px 0 0;letter-spacing:0.28em;font-size:28px;font-weight:700;color:#111111;text-align:center;background:#ffffff;border-radius:16px;padding:18px 12px;border:1px solid rgba(17,17,17,0.08);">
           ${escapeHtml(input.code)}
         </p>`
     : '';
+
+  const snippetBlock = input.snippet
+    ? `<div style="margin:20px 0 0;background:#ffffff;border-radius:16px;padding:14px 16px;border:1px solid rgba(17,17,17,0.08);">
+          <p style="margin:0 0 4px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6b6560;font-weight:600;">
+            Your ask
+          </p>
+          <p style="margin:0;font-size:15px;line-height:1.45;color:#111111;font-weight:600;">
+            ${escapeHtml(input.snippet)}
+          </p>
+        </div>`
+    : '';
+
+  const detailsBlock =
+    input.details && input.details.length > 0
+      ? `<div style="margin:20px 0 0;">
+          <p style="margin:0 0 10px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6b6560;font-weight:600;">
+            Request details
+          </p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;border:1px solid rgba(17,17,17,0.08);overflow:hidden;">
+            ${input.details
+              .map(
+                (row, index) => `
+              <tr>
+                <td style="padding:12px 16px;${index > 0 ? 'border-top:1px solid rgba(17,17,17,0.06);' : ''}vertical-align:top;width:34%;">
+                  <span style="font-size:12px;color:#6b6560;">${escapeHtml(row.label)}</span>
+                </td>
+                <td style="padding:12px 16px;${index > 0 ? 'border-top:1px solid rgba(17,17,17,0.06);' : ''}vertical-align:top;">
+                  <span style="font-size:13px;line-height:1.4;color:#111111;font-weight:600;word-break:break-word;">${escapeHtml(row.value)}</span>
+                </td>
+              </tr>`,
+              )
+              .join('')}
+          </table>
+        </div>`
+      : '';
 
   const cta =
     input.ctaLabel && input.ctaUrl
@@ -47,6 +88,8 @@ export function brandedEmailHtml(input: {
               <p style="margin:0;font-size:15px;line-height:1.55;color:#6b6560;">
                 ${bodyHtml}
               </p>
+              ${snippetBlock}
+              ${detailsBlock}
               ${codeBlock}
               ${cta}
               <p style="margin:32px 0 0;font-size:12px;color:#6b6560;">

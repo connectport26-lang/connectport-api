@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { brandedEmailHtml } from './mail.template';
+import type { EmailDetailRow } from './mail.context';
+import type { EmailAttachment } from '../queue/queue.module';
 
 @Injectable()
 export class MailService {
@@ -32,6 +34,9 @@ export class MailService {
     ctaLabel?: string;
     ctaPath?: string;
     code?: string;
+    snippet?: string;
+    details?: EmailDetailRow[];
+    attachments?: EmailAttachment[];
   }) {
     if (!this.resend) {
       this.logger.warn(
@@ -56,7 +61,13 @@ export class MailService {
           ctaLabel: input.ctaLabel,
           ctaUrl,
           code: input.code,
+          snippet: input.snippet,
+          details: input.details,
         }),
+        attachments: input.attachments?.map((file) => ({
+          filename: file.filename,
+          content: Buffer.from(file.content, 'base64'),
+        })),
       });
       return { delivered: true as const };
     } catch (error) {

@@ -18,7 +18,9 @@ import { serializeOpsUser, serializeUser } from '../common/serializers';
 import { AuthUser } from '../common/types/auth-user';
 import {
   LoginDto,
+  ForgotPasswordDto,
   ResendSignupOtpDto,
+  ResetPasswordDto,
   SignupDto,
   VerifySignupOtpDto,
 } from './dto/auth.dto';
@@ -27,6 +29,7 @@ const BCRYPT_ROUNDS = 12;
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
 const SIGNUP_PURPOSE = 'signup';
+const RESET_PURPOSE = 'password_reset';
 const OTP_RESEND_WINDOW_SEC = 60 * 15;
 const OTP_RESEND_MAX = 5;
 const LOGIN_FAIL_MAX = 10;
@@ -39,7 +42,7 @@ type SignupPayload = {
   name: string;
   phone: string;
   passwordHash: string;
-  accountType: 'individual' | 'business';
+  accountType: 'personal' | 'starting_business' | 'business';
 };
 
 @Injectable()
@@ -282,16 +285,25 @@ export class AuthService {
     await this.clearLoginFailures(email);
 
     if (credential.kind === 'ops' && credential.opsUser) {
+      const opsUser = await this.prisma.opsUser.findUnique({
+        where: { id: credential.opsUser.id },
+        include: { roleRelation: true },
+      });
+      if (!opsUser) {
+        throw new UnauthorizedException('Incorrect email or password.');
+      }
+      const serialized = serializeOpsUser(opsUser);
       const tokens = await this.issueSessionTokens({
-        sub: credential.opsUser.id,
+        sub: opsUser.id,
         kind: 'ops',
-        role: credential.opsUser.role,
+        role: serialized.role,
+        permissions: serialized.permissions,
         tv: credential.tokenVersion,
       });
       return {
         kind: 'ops' as const,
         ...tokens,
-        opsUser: serializeOpsUser(credential.opsUser),
+        opsUser: serialized,
       };
     }
 
@@ -352,19 +364,28 @@ export class AuthService {
         : { userId: payload.sub, kind: 'requester' as const };
     const credential = await this.prisma.credential.findFirst({
       where,
-      include: { opsUser: true, user: true },
+      include: {
+        opsUser: { include: { roleRelation: true } },
+        user: true,
+      },
     });
     if (!credential || (payload.tv ?? 0) !== credential.tokenVersion) {
       throw new UnauthorizedException('Session revoked.');
     }
 
+    let role: AuthUser['role'];
+    let permissions: string[] | undefined;
+    if (payload.kind === 'ops' && credential.opsUser) {
+      const serialized = serializeOpsUser(credential.opsUser);
+      role = serialized.role;
+      permissions = serialized.permissions;
+    }
+
     const authUser: AuthUser = {
       sub: payload.sub,
       kind: payload.kind,
-      role:
-        payload.kind === 'ops'
-          ? credential.opsUser?.role
-          : undefined,
+      role,
+      permissions,
       tv: credential.tokenVersion,
     };
     return this.issueSessionTokens(authUser);
@@ -396,8 +417,177 @@ export class AuthService {
     }
     const opsUser = await this.prisma.opsUser.findUnique({
       where: { id: authUser.sub },
+      include: { roleRelation: true },
     });
     return opsUser ? serializeOpsUser(opsUser) : null;
+  }
+
+  async completeOpsSetup(
+    authUser: AuthUser,
+    input: { name: string; password: string; phone?: string },
+  ) {
+    if (authUser.kind !== 'ops') {
+      throw new UnauthorizedException('Ops login required.');
+    }
+    const name = input.name.trim();
+    if (name.length < 2) {
+      throw new BadRequestException('Add your full name.');
+    }
+    if (input.password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters.');
+    }
+
+    const passwordHash = await bcrypt.hash(input.password, 12);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.opsUser.update({
+        where: { id: authUser.sub },
+        data: {
+          name,
+          phone: input.phone?.trim() || null,
+          mustChangePassword: false,
+          profileCompletedAt: new Date(),
+        },
+      });
+      await tx.credential.update({
+        where: { opsUserId: authUser.sub },
+        data: {
+          passwordHash,
+          tokenVersion: { increment: 1 },
+        },
+      });
+    });
+
+    const opsUser = await this.prisma.opsUser.findUnique({
+      where: { id: authUser.sub },
+      include: { roleRelation: true, credential: true },
+    });
+    if (!opsUser?.credential) {
+      throw new UnauthorizedException('Ops login required.');
+    }
+    const serialized = serializeOpsUser(opsUser);
+    const tokens = await this.issueSessionTokens({
+      sub: opsUser.id,
+      kind: 'ops',
+      role: serialized.role,
+      permissions: serialized.permissions,
+      tv: opsUser.credential.tokenVersion,
+    });
+    return { ...tokens, opsUser: serialized };
+  }
+
+  /** Start password reset: email OTP if account exists (response is always generic). */
+  async startPasswordReset(input: ForgotPasswordDto) {
+    this.assertMailReadyForOtp();
+    const email = input.email.trim().toLowerCase();
+    await this.assertOtpResendBudget(email);
+
+    const credential = await this.prisma.credential.findUnique({
+      where: { email },
+      include: { user: true, opsUser: true },
+    });
+
+    // Always return the same shape so we do not leak registration.
+    const base = {
+      ok: true as const,
+      email,
+      expiresInSeconds: Math.floor(OTP_TTL_MS / 1000),
+      emailDelivered: this.mail.isConfigured(),
+    };
+
+    if (!credential || credential.disabled) {
+      return base;
+    }
+
+    const code = this.generateOtp();
+    const name =
+      credential.user?.name ?? credential.opsUser?.name ?? 'there';
+
+    await this.prisma.emailOtp.deleteMany({
+      where: { email, purpose: RESET_PURPOSE },
+    });
+    await this.prisma.emailOtp.create({
+      data: {
+        email,
+        purpose: RESET_PURPOSE,
+        codeHash: this.hashOtp(email, code),
+        payloadJson: JSON.stringify({ credentialId: credential.id }),
+        expiresAt: new Date(Date.now() + OTP_TTL_MS),
+      },
+    });
+
+    const queued = await this.mailQueue.enqueue({
+      to: email,
+      subject: 'Reset your ConnectPort password',
+      headline: 'Password reset',
+      body: `Hi ${name},\n\nEnter this code to choose a new password. It expires in 10 minutes. If you did not ask for this, you can ignore the email.`,
+      code,
+    });
+
+    const allowDevCode =
+      !isProduction(this.config) &&
+      (!this.mail.isConfigured() || !queued.queued);
+
+    return {
+      ...base,
+      ...(allowDevCode ? { devCode: code } : {}),
+    };
+  }
+
+  async resetPassword(input: ResetPasswordDto) {
+    const email = input.email.trim().toLowerCase();
+    const code = input.code.trim();
+    const pending = await this.prisma.emailOtp.findFirst({
+      where: { email, purpose: RESET_PURPOSE },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!pending) {
+      throw new BadRequestException(
+        'No pending reset for this email. Request a new code.',
+      );
+    }
+    if (pending.expiresAt.getTime() < Date.now()) {
+      await this.prisma.emailOtp.delete({ where: { id: pending.id } });
+      throw new BadRequestException('Code expired. Request a new one.');
+    }
+    if (pending.attempts >= OTP_MAX_ATTEMPTS) {
+      await this.prisma.emailOtp.delete({ where: { id: pending.id } });
+      throw new BadRequestException('Too many attempts. Request a new code.');
+    }
+
+    const expected = Buffer.from(pending.codeHash);
+    const actual = Buffer.from(this.hashOtp(email, code));
+    const ok =
+      expected.length === actual.length && timingSafeEqual(expected, actual);
+    if (!ok) {
+      await this.prisma.emailOtp.update({
+        where: { id: pending.id },
+        data: { attempts: pending.attempts + 1 },
+      });
+      throw new UnauthorizedException('Incorrect verification code.');
+    }
+
+    const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
+    const credential = await this.prisma.credential.findUnique({
+      where: { email },
+    });
+    if (!credential || credential.disabled) {
+      await this.prisma.emailOtp.delete({ where: { id: pending.id } });
+      throw new BadRequestException('This account cannot be reset.');
+    }
+
+    await this.prisma.credential.update({
+      where: { id: credential.id },
+      data: {
+        passwordHash,
+        tokenVersion: { increment: 1 },
+      },
+    });
+    await this.prisma.emailOtp.deleteMany({
+      where: { email, purpose: RESET_PURPOSE },
+    });
+    await this.clearLoginFailures(email);
+
+    return { ok: true as const };
   }
 
   /** Server-side logout: bump tokenVersion so existing JWTs fail validation. */

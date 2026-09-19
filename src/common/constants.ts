@@ -1,6 +1,11 @@
 export const ACCOUNT_CAPS = {
-  individual: {
-    label: 'Individual',
+  personal: {
+    label: 'Personal',
+    maxBudgetNgn: 2_000_000,
+    maxQuantity: 50,
+  },
+  starting_business: {
+    label: 'Starting a business',
     maxBudgetNgn: 2_000_000,
     maxQuantity: 50,
   },
@@ -20,4 +25,11 @@ export const REQUESTER_STATUS_LABELS: Record<string, string> = {
   in_transit_freight: 'On its way from China',
   arrived_nigeria_warehouse: 'Arrived in Nigeria',
   delivered: 'Delivered',
+  cancelled: 'Cancelled',
+};
+
+export const CANCEL_REASON_LABELS: Record<string, string> = {
+  out_of_stock: 'Out of stock',
+  customer_request: 'Customer request',
+  other: 'Other',
 };

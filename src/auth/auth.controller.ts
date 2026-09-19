@@ -15,11 +15,18 @@ import { AuthService } from './auth.service';
 import { CaptchaService } from './captcha.service';
 import {
   LoginDto,
+  ForgotPasswordDto,
   ResendSignupOtpDto,
+  ResetPasswordDto,
   SignupDto,
   VerifySignupOtpDto,
+  CompleteOpsSetupDto,
 } from './dto/auth.dto';
-import { OptionalAuth, Public } from '../common/decorators/auth.decorators';
+import {
+  OptionalAuth,
+  Public,
+  RequireOps,
+} from '../common/decorators/auth.decorators';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import {
@@ -77,6 +84,24 @@ export class AuthController {
   @Post('signup/resend')
   resendSignup(@Body() body: ResendSignupOtpDto) {
     return this.auth.resendSignupOtp(body);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('password/forgot')
+  async forgotPassword(
+    @Body() body: ForgotPasswordDto,
+    @Req() req: Request,
+  ) {
+    await this.maybeRequireCaptcha(body.email, body.captchaToken, req);
+    return this.auth.startPasswordReset(body);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('password/reset')
+  resetPassword(@Body() body: ResetPasswordDto) {
+    return this.auth.resetPassword(body);
   }
 
   @Public()
@@ -159,6 +184,19 @@ export class AuthController {
   @Get('ops/me')
   async getOpsMe(@CurrentUser() user: AuthUser | null, @Res() res: Response) {
     res.status(200).json(await this.auth.getCurrentOpsUser(user));
+  }
+
+  @RequireOps()
+  @Post('ops/complete-setup')
+  async completeOpsSetup(
+    @CurrentUser() user: AuthUser,
+    @Body() body: CompleteOpsSetupDto,
+    @Res({ passthrough: true }) res: Response,
+    @Headers('x-client') client?: string,
+  ) {
+    const result = await this.auth.completeOpsSetup(user, body);
+    setSessionCookies(res, result.accessToken, result.refreshToken, this.config);
+    return stripTokensForBrowser(result, client);
   }
 
   private async maybeRequireCaptcha(

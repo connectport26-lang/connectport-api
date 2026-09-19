@@ -6,11 +6,13 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthUser } from '../common/types/auth-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { ACCESS_COOKIE } from './auth-cookies';
+import { ALL_OPS_PERMISSIONS, AGENT_DEFAULT_PERMISSIONS } from '../common/permissions';
 
 type JwtPayload = {
   sub: string;
   kind: 'requester' | 'ops';
-  role?: 'admin' | 'agent';
+  role?: string;
+  permissions?: string[];
   tv?: number;
   typ?: string;
 };
@@ -43,7 +45,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (payload.kind === 'ops') {
       const credential = await this.prisma.credential.findFirst({
         where: { opsUserId: payload.sub, kind: 'ops' },
-        include: { opsUser: true },
+        include: { opsUser: { include: { roleRelation: true } } },
       });
       if (!credential?.opsUser) {
         throw new UnauthorizedException();
@@ -54,10 +56,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       if ((payload.tv ?? 0) !== credential.tokenVersion) {
         throw new UnauthorizedException('Session revoked.');
       }
+      const slug =
+        credential.opsUser.roleRelation?.slug ?? credential.opsUser.role;
+      const permissions =
+        credential.opsUser.roleRelation?.permissions ??
+        (slug === 'admin' ? [...ALL_OPS_PERMISSIONS] : [...AGENT_DEFAULT_PERMISSIONS]);
       return {
         sub: payload.sub,
         kind: 'ops',
-        role: credential.opsUser.role,
+        role: slug === 'admin' ? 'admin' : slug === 'agent' ? 'agent' : slug,
+        permissions,
+        mustChangePassword: credential.opsUser.mustChangePassword,
       };
     }
 

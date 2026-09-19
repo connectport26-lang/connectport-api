@@ -7,6 +7,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { OriginCsrfGuard } from './common/guards/origin-csrf.guard';
 import { OpsAdminGuard } from './common/guards/ops-admin.guard';
 import { OpsGuard } from './common/guards/ops.guard';
+import { OpsSetupGuard } from './common/guards/ops-setup.guard';
 import { RequesterGuard } from './common/guards/requester.guard';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
@@ -49,6 +50,7 @@ import { UploadsModule } from './uploads/uploads.module';
     { provide: APP_GUARD, useClass: RequesterGuard },
     { provide: APP_GUARD, useClass: OpsGuard },
     { provide: APP_GUARD, useClass: OpsAdminGuard },
+    { provide: APP_GUARD, useClass: OpsSetupGuard },
     { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
   ],
 })

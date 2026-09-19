@@ -2,7 +2,11 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { RequireRequester } from '../common/decorators/auth.decorators';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUser } from '../common/types/auth-user';
-import { CreateGuidedRequestDto, CreateRequestDto } from './dto/requests.dto';
+import {
+  CreateCatalogOrderDto,
+  CreateGuidedRequestDto,
+  CreateRequestDto,
+} from './dto/requests.dto';
 import { RequestsService } from './requests.service';
 
 @Controller('me/requests')
@@ -26,7 +30,10 @@ export class RequesterRequestsController {
   }
 
   @Post('guided')
-  createGuided(@CurrentUser() user: AuthUser, @Body() body: CreateGuidedRequestDto) {
+  createGuided(
+    @CurrentUser() user: AuthUser,
+    @Body() body: CreateGuidedRequestDto,
+  ) {
     return this.requests.createGuidedRequest(user.sub, body);
   }
 
@@ -55,5 +62,16 @@ export class RequesterRequestsController {
     @Param('quoteId') quoteId: string,
   ) {
     return this.requests.payQuote(user.sub, id, quoteId);
+  }
+}
+
+@Controller('me/catalog-orders')
+@RequireRequester()
+export class CatalogOrdersController {
+  constructor(private readonly requests: RequestsService) {}
+
+  @Post()
+  create(@CurrentUser() user: AuthUser, @Body() body: CreateCatalogOrderDto) {
+    return this.requests.createCatalogOrder(user.sub, body);
   }
 }

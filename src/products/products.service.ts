@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Product, ProductStatus } from '@prisma/client';
 import { MailQueueService } from '../queue/queue.module';
+import { buildRequestEmailContext } from '../mail/mail.context';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.module';
 import {
@@ -170,10 +171,25 @@ export class ProductsService {
     if (product.sourceRequestId) {
       const request = await this.prisma.request.findUnique({
         where: { id: product.sourceRequestId },
-        include: { user: true },
+        include: { user: true, references: true },
       });
       if (request) {
         userIds.add(request.userId);
+        const context = buildRequestEmailContext({
+          reference: request.reference,
+          sourceType: request.sourceType,
+          sourceValue: request.sourceValue,
+          quantity: request.quantity,
+          budgetMax: Number(request.budgetMax),
+          qualityNotes: request.qualityNotes,
+          flexibility: request.flexibility,
+          productName: request.productName,
+          productDescription: request.productDescription,
+          budgetScope: request.budgetScope,
+          needByDate: request.needByDate?.toISOString() ?? null,
+          needByTimeframe: request.needByTimeframe,
+          references: request.references,
+        });
         await this.prisma.notification.create({
           data: {
             requestId: request.id,
@@ -185,12 +201,14 @@ export class ProductsService {
           to: request.user.email,
           subject: `${request.reference}: product ${status}`,
           headline: `Your product is now ${status}`,
-          body: `Hi ${request.user.name}, "${product.name}" linked to ${request.reference} is now ${status} on ConnectPort.`,
+          body: `Hi ${request.user.name.split(' ')[0] || request.user.name},\n\n"${product.name}" linked to ${request.reference} is now ${status} on ConnectPort.`,
           ctaLabel: status === 'published' ? 'View store' : 'View request',
           ctaPath:
             status === 'published'
               ? `/store/${product.slug}`
               : `/requests/${request.id}`,
+          snippet: context.snippet,
+          details: context.details,
         });
       }
     }
@@ -199,12 +217,28 @@ export class ProductsService {
       const quotes = await this.prisma.quote.findMany({
         where: { supplierRef: product.id },
         include: {
-          request: { include: { user: true } },
+          request: { include: { user: true, references: true } },
         },
       });
       for (const quote of quotes) {
         if (userIds.has(quote.request.userId)) continue;
         userIds.add(quote.request.userId);
+        const req = quote.request;
+        const context = buildRequestEmailContext({
+          reference: req.reference,
+          sourceType: req.sourceType,
+          sourceValue: req.sourceValue,
+          quantity: req.quantity,
+          budgetMax: Number(req.budgetMax),
+          qualityNotes: req.qualityNotes,
+          flexibility: req.flexibility,
+          productName: req.productName,
+          productDescription: req.productDescription,
+          budgetScope: req.budgetScope,
+          needByDate: req.needByDate?.toISOString() ?? null,
+          needByTimeframe: req.needByTimeframe,
+          references: req.references,
+        });
         await this.prisma.notification.create({
           data: {
             requestId: quote.requestId,
@@ -216,9 +250,11 @@ export class ProductsService {
           to: quote.request.user.email,
           subject: `${quote.request.reference}: product published`,
           headline: 'A product from your quote is live',
-          body: `"${product.name}" is now published on the ConnectPort store.`,
+          body: `Hi ${quote.request.user.name.split(' ')[0] || quote.request.user.name},\n\n"${product.name}" is now published on the ConnectPort store.`,
           ctaLabel: 'View product',
           ctaPath: `/store/${product.slug}`,
+          snippet: context.snippet,
+          details: context.details,
         });
       }
     }

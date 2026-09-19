@@ -27,8 +27,8 @@ export class SignupDto {
   @MinLength(8)
   password: string;
 
-  @IsIn(['individual', 'business'])
-  accountType: 'individual' | 'business';
+  @IsIn(['personal', 'starting_business', 'business'])
+  accountType: 'personal' | 'starting_business' | 'business';
 
   @IsOptional()
   @IsString()
@@ -63,4 +63,42 @@ export class ResendSignupOtpDto {
   @Transform(({ value }: { value: string }) => value.trim().toLowerCase())
   @IsEmail()
   email: string;
+}
+
+export class ForgotPasswordDto {
+  @Transform(({ value }: { value: string }) => value.trim().toLowerCase())
+  @IsEmail()
+  email: string;
+
+  @IsOptional()
+  @IsString()
+  captchaToken?: string;
+}
+
+export class ResetPasswordDto {
+  @Transform(({ value }: { value: string }) => value.trim().toLowerCase())
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @Length(6, 6)
+  code: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
+}
+
+export class CompleteOpsSetupDto {
+  @IsString()
+  @MinLength(2)
+  name: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
 }

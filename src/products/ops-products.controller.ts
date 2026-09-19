@@ -1,5 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { RequireOps } from '../common/decorators/auth.decorators';
+import {
+  RequireOps,
+  RequireOpsPermission,
+} from '../common/decorators/auth.decorators';
 import {
   BulkProductStatusDto,
   CreateProductDto,
@@ -19,21 +22,25 @@ export class OpsProductsController {
   }
 
   @Post()
+  @RequireOpsPermission('catalog.manage')
   create(@Body() body: CreateProductDto) {
     return this.products.create(body);
   }
 
   @Post('bulk-status')
+  @RequireOpsPermission('catalog.manage')
   bulkStatus(@Body() body: BulkProductStatusDto) {
     return this.products.bulkUpdateStatus(body);
   }
 
   @Patch(':id')
+  @RequireOpsPermission('catalog.manage')
   update(@Param('id') id: string, @Body() body: UpdateProductDto) {
     return this.products.update(id, body);
   }
 
   @Post(':id/publish')
+  @RequireOpsPermission('catalog.manage')
   publish(@Param('id') id: string) {
     return this.products.publish(id);
   }

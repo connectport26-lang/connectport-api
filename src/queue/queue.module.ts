@@ -4,6 +4,14 @@ import { MailService } from '../mail/mail.service';
 import { MailModule } from '../mail/mail.module';
 import { RedisService } from '../redis/redis.module';
 
+import type { EmailDetailRow } from '../mail/mail.context';
+
+export type EmailAttachment = {
+  filename: string;
+  /** Base64-encoded file content */
+  content: string;
+};
+
 export type EmailJobPayload = {
   to: string;
   subject: string;
@@ -12,6 +20,9 @@ export type EmailJobPayload = {
   ctaLabel?: string;
   ctaPath?: string;
   code?: string;
+  snippet?: string;
+  details?: EmailDetailRow[];
+  attachments?: EmailAttachment[];
 };
 
 const EMAIL_QUEUE_KEY = 'cp:queue:email';

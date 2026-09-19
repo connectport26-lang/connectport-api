@@ -28,7 +28,11 @@ const REQUEST_STATUSES = [
   'in_transit_freight',
   'arrived_nigeria_warehouse',
   'delivered',
+  'cancelled',
 ] as const;
+
+const CANCEL_REASONS = ['out_of_stock', 'customer_request', 'other'] as const;
+const REQUEST_CHANNELS = ['sourcing', 'catalog'] as const;
 
 export class CreateRequestDto {
   @IsIn(SOURCE_TYPES)
@@ -118,6 +122,26 @@ export class CreateGuidedRequestDto {
   preferredProductId?: string;
 }
 
+export class CreateCatalogOrderDto {
+  @IsString()
+  @MinLength(1)
+  productId: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  quantity: number;
+}
+
+export class CancelRequestDto {
+  @IsIn(CANCEL_REASONS)
+  reason: (typeof CANCEL_REASONS)[number];
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
 export class QuoteDraftDto {
   @IsString()
   supplierRef: string;
@@ -176,6 +200,10 @@ export class RequestFiltersDto {
   @IsOptional()
   @IsIn([...REQUEST_STATUSES, 'all'])
   status?: (typeof REQUEST_STATUSES)[number] | 'all';
+
+  @IsOptional()
+  @IsIn([...REQUEST_CHANNELS, 'all'])
+  channel?: (typeof REQUEST_CHANNELS)[number] | 'all';
 
   @IsOptional()
   @IsString()

@@ -24,6 +24,37 @@ type SniffedImage = {
   ext: string;
 };
 
+function sniffVideo(file: UploadFile): SniffedImage | null {
+  const type = (file.mimetype || '').toLowerCase();
+  if (type === 'video/mp4' || type === 'video/quicktime') {
+    return { mime: type === 'video/quicktime' ? 'video/quicktime' : 'video/mp4', ext: type === 'video/quicktime' ? '.mov' : '.mp4' };
+  }
+  if (type === 'video/webm') {
+    return { mime: 'video/webm', ext: '.webm' };
+  }
+  // MP4 / ISO BMFF ftyp
+  if (
+    file.buffer.length >= 12 &&
+    file.buffer[4] === 0x66 &&
+    file.buffer[5] === 0x74 &&
+    file.buffer[6] === 0x79 &&
+    file.buffer[7] === 0x70
+  ) {
+    return { mime: 'video/mp4', ext: '.mp4' };
+  }
+  // WebM / EBML
+  if (
+    file.buffer.length >= 4 &&
+    file.buffer[0] === 0x1a &&
+    file.buffer[1] === 0x45 &&
+    file.buffer[2] === 0xdf &&
+    file.buffer[3] === 0xa3
+  ) {
+    return { mime: 'video/webm', ext: '.webm' };
+  }
+  return null;
+}
+
 function sniffImage(buffer: Buffer): SniffedImage | null {
   if (buffer.length < 12) return null;
   // JPEG
@@ -79,13 +110,40 @@ export class UploadsService {
       );
     }
 
+    return this.storeBinary(file, sniffed, 'requests');
+  }
+
+  /** Images or short videos for sourcing finds (mp4/webm/quicktime). */
+  async storeFindMedia(file: UploadFile): Promise<{ url: string; kind: 'image' | 'video' }> {
+    const image = sniffImage(file.buffer);
+    if (image) {
+      const stored = await this.storeBinary(file, image, 'finds');
+      return { url: stored.url, kind: 'image' };
+    }
+
+    const video = sniffVideo(file);
+    if (!video) {
+      throw new Error(
+        'Upload a JPEG, PNG, WebP, GIF, MP4, or WebM under the size limit.',
+      );
+    }
+
+    const stored = await this.storeBinary(file, video, 'finds');
+    return { url: stored.url, kind: 'video' };
+  }
+
+  private async storeBinary(
+    file: UploadFile,
+    sniffed: SniffedImage,
+    folder: string,
+  ): Promise<{ url: string }> {
     if (this.isR2Configured()) {
-      return this.uploadToR2(file, sniffed);
+      return this.uploadToR2(file, sniffed, folder);
     }
 
     if (isProduction(this.config)) {
       throw new ServiceUnavailableException(
-        'Image uploads are unavailable. Cloudflare R2 is not configured.',
+        'Uploads are unavailable. Cloudflare R2 is not configured.',
       );
     }
 
@@ -124,6 +182,7 @@ export class UploadsService {
   private async uploadToR2(
     file: UploadFile,
     sniffed: SniffedImage,
+    folder = 'requests',
   ): Promise<{ url: string }> {
     const bucket = this.config.getOrThrow<string>('R2_BUCKET').trim();
     const publicBase = this.config
@@ -131,7 +190,7 @@ export class UploadsService {
       .trim()
       .replace(/\/$/, '');
 
-    const key = `requests/${randomUUID()}${sniffed.ext}`;
+    const key = `${folder}/${randomUUID()}${sniffed.ext}`;
 
     try {
       await this.getS3().send(

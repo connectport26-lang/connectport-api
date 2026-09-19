@@ -35,12 +35,47 @@ export function serializeUser(user: User) {
   };
 }
 
-export function serializeOpsUser(opsUser: OpsUser) {
+export function serializeOpsUser(
+  opsUser: OpsUser & {
+    roleRelation?: {
+      id: string;
+      name: string;
+      slug: string;
+      permissions: string[];
+    } | null;
+  },
+) {
+  const slug = opsUser.roleRelation?.slug ?? opsUser.role;
+  const permissions =
+    opsUser.roleRelation?.permissions ??
+    (opsUser.role === 'admin'
+      ? [
+          'queue.view',
+          'queue.claim',
+          'finds.submit',
+          'finds.approve',
+          'catalog.manage',
+          'customers.view',
+          'agents.invite',
+          'roles.manage',
+          'pricing.manage',
+          'teams.manage',
+          'activity.view',
+        ]
+      : ['queue.view', 'queue.claim', 'finds.submit', 'activity.view']);
+
   return {
     id: opsUser.id,
-    name: opsUser.name,
+    name: opsUser.name ?? '',
     email: opsUser.email,
-    role: opsUser.role,
+    phone: opsUser.phone ?? null,
+    role: slug === 'admin' ? ('admin' as const) : ('agent' as const),
+    roleId: opsUser.roleId ?? null,
+    roleSlug: slug,
+    roleName: opsUser.roleRelation?.name ?? slug,
+    permissions,
+    mustChangePassword: opsUser.mustChangePassword,
+    profileComplete: Boolean(opsUser.profileCompletedAt && opsUser.name),
   };
 }
 
@@ -49,6 +84,7 @@ export function serializeRequest(request: Request & { references?: RequestRefere
     id: string;
     reference: string;
     userId: string;
+    channel: Request['channel'];
     sourceType: Request['sourceType'];
     sourceValue: string;
     quantity: number;
@@ -57,6 +93,8 @@ export function serializeRequest(request: Request & { references?: RequestRefere
     qualityNotes: string;
     flexibility: Request['flexibility'];
     status: Request['status'];
+    cancelReason?: Request['cancelReason'];
+    cancelNote?: string | null;
     assignedOpsUserId: string | null;
     marketplaceEligible?: boolean;
     createdAt: string;
@@ -71,6 +109,7 @@ export function serializeRequest(request: Request & { references?: RequestRefere
     id: request.id,
     reference: request.reference,
     userId: request.userId,
+    channel: request.channel,
     sourceType: request.sourceType,
     sourceValue: request.sourceValue,
     quantity: request.quantity,
@@ -83,19 +122,40 @@ export function serializeRequest(request: Request & { references?: RequestRefere
     createdAt: request.createdAt.toISOString(),
   };
 
+  if (request.cancelReason != null) {
+    payload.cancelReason = request.cancelReason;
+  }
+  if (request.cancelNote != null) {
+    payload.cancelNote = request.cancelNote;
+  }
   if (request.marketplaceEligible != null) {
     payload.marketplaceEligible = request.marketplaceEligible;
   }
   if (request.productName != null) {
     payload.productName = request.productName;
+  }
+  if (request.productDescription != null) {
     payload.productDescription = request.productDescription;
+  }
+  if (request.budgetScope != null) {
     payload.budgetScope = request.budgetScope;
+  }
+  if (request.needByKind != null) {
     payload.needByKind = request.needByKind;
-    payload.needByDate = request.needByDate?.toISOString() ?? null;
+  }
+  if (request.needByDate != null) {
+    payload.needByDate = request.needByDate.toISOString();
+  }
+  if (request.needByTimeframe != null) {
     payload.needByTimeframe = request.needByTimeframe;
-    payload.references = request.references?.map((item) => ({
-      id: item.id, kind: item.kind, value: item.value, createdAt: item.createdAt.toISOString(),
-    })) ?? [];
+  }
+  if (request.references != null) {
+    payload.references = request.references.map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      value: item.value,
+      createdAt: item.createdAt.toISOString(),
+    }));
   }
 
   return payload;
@@ -129,6 +189,8 @@ export function serializePayment(payment: Payment) {
     gatewayRef: payment.gatewayRef,
     status: payment.status,
     paidAt: payment.paidAt ? payment.paidAt.toISOString() : null,
+    refundRef: payment.refundRef ?? null,
+    refundedAt: payment.refundedAt ? payment.refundedAt.toISOString() : null,
   };
 }
 

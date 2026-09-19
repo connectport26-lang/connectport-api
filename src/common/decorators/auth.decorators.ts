@@ -14,3 +14,7 @@ export const RequireOps = () => SetMetadata(OPS_KIND_KEY, true);
 
 export const OPS_ADMIN_KEY = 'opsAdmin';
 export const RequireOpsAdmin = () => SetMetadata(OPS_ADMIN_KEY, true);
+
+export const OPS_PERMISSION_KEY = 'opsPermission';
+export const RequireOpsPermission = (...permissions: string[]) =>
+  SetMetadata(OPS_PERMISSION_KEY, permissions);
