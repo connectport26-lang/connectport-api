@@ -1,0 +1,39 @@
+ConnectPort go-live security checklist (OWASP ASVS L2 subset)
+
+Auth / session
+[ ] Demo pay returns 410/Gone in production
+[ ] Cookie-only browser session (no JWT in localStorage)
+[ ] Access cookie TTL <= 1h; refresh rotates; reuse revokes session
+[ ] Origin CSRF rejects cross-site mutating cookie requests
+[ ] Login uses constant-time bcrypt path; lockout after 10 fails / 15m
+[ ] Signup does not reveal whether email exists
+[ ] OTP attempts persist across resend; timingSafeEqual on hashes
+[ ] Ops JWT role loaded from DB; demotion invalidates via tokenVersion
+[ ] /ops middleware redirects without cp_access cookie
+[ ] Seed refuses NODE_ENV=production; admin password from SEED_* env
+
+Payments
+[ ] verify requires caller === metadata.userId
+[ ] completePaystackPayment checks quoted + non-rejected + amount/currency
+[ ] Webhook fails closed without rawBody / bad HMAC / missing secret
+[ ] Ops cannot jump to procured+ before approved_paid
+
+Data / uploads
+[ ] Public GET /products/:id returns published only
+[ ] Public catalog omits sourceRequestId
+[ ] Uploads sniff magic bytes; quota increments after success
+[ ] /ready returns generic errors only
+
+Headers / ops
+[ ] Next CSP, HSTS, X-Frame-Options DENY, nosniff
+[ ] Nest helmet enabled; trust proxy set
+[ ] Ops reference links allowlist http(s) only
+[ ] OTP codes never logged; HTTP logs omit query strings
+
+Optional
+[ ] TURNSTILE_SECRET_KEY set; captcha after 3 login failures
+[ ] SENTRY_DSN with sendDefaultPii false
+[ ] npm audit / CI dependency scan
+[ ] Manual: XSS steal attempt fails (no localStorage token)
+[ ] Manual: cross-user payment verify returns 404
+[ ] Manual: draft product id returns 404

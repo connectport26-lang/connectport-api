@@ -11,3 +11,6 @@ export const RequireRequester = () => SetMetadata(REQUESTER_KIND_KEY, true);
 
 export const OPS_KIND_KEY = 'opsKind';
 export const RequireOps = () => SetMetadata(OPS_KIND_KEY, true);
+
+export const OPS_ADMIN_KEY = 'opsAdmin';
+export const RequireOpsAdmin = () => SetMetadata(OPS_ADMIN_KEY, true);

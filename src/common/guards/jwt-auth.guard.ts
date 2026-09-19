@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
+import { Request } from 'express';
+import { ACCESS_COOKIE } from '../../auth/auth-cookies';
 import {
   IS_OPTIONAL_AUTH_KEY,
   IS_PUBLIC_KEY,
@@ -30,10 +32,14 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       [context.getHandler(), context.getClass()],
     );
     if (isOptional) {
-      const request = context.switchToHttp().getRequest<{
-        headers?: { authorization?: string };
-      }>();
-      if (!request.headers?.authorization) {
+      const request = context.switchToHttp().getRequest<Request>();
+      const hasBearer = Boolean(request.headers?.authorization);
+      const hasCookie = Boolean(
+        (request as Request & { cookies?: Record<string, string> }).cookies?.[
+          ACCESS_COOKIE
+        ],
+      );
+      if (!hasBearer && !hasCookie) {
         return true;
       }
     }

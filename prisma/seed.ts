@@ -2,14 +2,30 @@ import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
-const PASSWORD = 'password123';
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Refusing to seed: NODE_ENV=production. Seeding wipes data and must not run against production.',
+    );
+  }
+
+  const ADMIN_PASSWORD =
+    process.env.SEED_ADMIN_PASSWORD?.trim() || 'connectport-dev-admin';
+  const SAMPLE_PASSWORD =
+    process.env.SEED_SAMPLE_PASSWORD?.trim() || 'connectport-sample';
+  const ADMIN_EMAIL =
+    process.env.SEED_ADMIN_EMAIL?.trim() || 'admin@connectport.local';
+
   await prisma.notification.deleteMany();
   await prisma.statusUpdate.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.quote.deleteMany();
   await prisma.request.deleteMany();
+  await prisma.product.deleteMany();
+  await prisma.teamMember.deleteMany();
+  await prisma.team.deleteMany();
+  await prisma.emailOtp.deleteMany();
   await prisma.credential.deleteMany();
   await prisma.user.deleteMany();
   await prisma.opsUser.deleteMany();
@@ -18,7 +34,133 @@ async function main() {
     `CREATE SEQUENCE IF NOT EXISTS request_reference_seq START WITH 1001`,
   );
 
-  const passwordHash = await bcrypt.hash(PASSWORD, 12);
+  await prisma.product.createMany({
+    data: [
+      {
+        id: 'prod_hoodie',
+        slug: 'oversized-heavyweight-hoodie-black',
+        name: 'Oversized Heavyweight Hoodie',
+        description:
+          '350gsm cotton fleece with a boxy streetwear cut. Soft handfeel, ribbed hem, verified stitching quality.',
+        imageUrl:
+          'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=900&q=80',
+        unitPrice: 8500,
+        moq: 20,
+        weightKg: 0.65,
+        estimatedDeliveryDays: 18,
+        availability: 'made_to_order',
+        status: 'published',
+        verified: true,
+        featuredOnLanding: true,
+        landingSort: 1,
+        tags: ['hoodie', 'black', 'streetwear', 'apparel'],
+        createdAt: new Date('2026-02-01T12:00:00.000Z'),
+      },
+      {
+        id: 'prod_tech_fleece',
+        slug: 'tech-fleece-tracksuit-set',
+        name: 'Tech Fleece Tracksuit Set',
+        description:
+          'Jacket + jogger set in brushed fleece. Clean silhouette, tapered legs, ready for bulk drops.',
+        imageUrl:
+          'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=900&q=80',
+        unitPrice: 22000,
+        moq: 10,
+        weightKg: 1.1,
+        estimatedDeliveryDays: 21,
+        availability: 'limited',
+        status: 'published',
+        verified: true,
+        featuredOnLanding: false,
+        landingSort: 0,
+        tags: ['fleece', 'tracksuit', 'set', 'streetwear'],
+        createdAt: new Date('2026-02-10T12:00:00.000Z'),
+      },
+      {
+        id: 'prod_chair',
+        slug: 'cafe-stackable-chair-matte-black',
+        name: 'Cafe Stackable Chair',
+        description:
+          'Matte black powder coat, PU seat, stackable for tight storage. Built for restaurants and cafés.',
+        imageUrl:
+          'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?w=900&q=80',
+        unitPrice: 18500,
+        moq: 30,
+        weightKg: 4.2,
+        estimatedDeliveryDays: 28,
+        availability: 'in_stock',
+        status: 'published',
+        verified: true,
+        featuredOnLanding: true,
+        landingSort: 2,
+        tags: ['chair', 'restaurant', 'furniture'],
+        createdAt: new Date('2026-03-01T12:00:00.000Z'),
+      },
+      {
+        id: 'prod_skincare',
+        slug: 'minimal-glass-skincare-set',
+        name: 'Minimal Glass Skincare Set',
+        description:
+          'Amber glass droppers and pump jars. Private-label ready packaging, verified finish.',
+        imageUrl:
+          'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=900&q=80',
+        unitPrice: 3400,
+        moq: 50,
+        weightKg: 0.28,
+        estimatedDeliveryDays: 20,
+        availability: 'made_to_order',
+        status: 'published',
+        verified: true,
+        featuredOnLanding: false,
+        landingSort: 0,
+        tags: ['skincare', 'packaging', 'beauty'],
+        createdAt: new Date('2026-03-12T12:00:00.000Z'),
+      },
+      {
+        id: 'prod_tote',
+        slug: 'canvas-tote-natural',
+        name: 'Heavy Canvas Tote - Natural',
+        description:
+          '16oz canvas, reinforced handles, clean branding panel. Ideal for merch runs.',
+        imageUrl:
+          'https://images.unsplash.com/photo-1590874103328-eac38a67478e?w=900&q=80',
+        unitPrice: 2800,
+        moq: 50,
+        weightKg: 0.35,
+        estimatedDeliveryDays: 16,
+        availability: 'in_stock',
+        status: 'published',
+        verified: true,
+        featuredOnLanding: true,
+        landingSort: 3,
+        tags: ['tote', 'canvas', 'merch', 'bag'],
+        createdAt: new Date('2026-03-18T12:00:00.000Z'),
+      },
+      {
+        id: 'prod_lamp',
+        slug: 'soft-glow-desk-lamp',
+        name: 'Soft Glow Desk Lamp',
+        description:
+          'Warm LED, touch dimmer, matte finish. Compact footprint for desks and bedside.',
+        imageUrl:
+          'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=900&q=80',
+        unitPrice: 12500,
+        moq: 20,
+        weightKg: 1.4,
+        estimatedDeliveryDays: 22,
+        availability: 'made_to_order',
+        status: 'published',
+        verified: true,
+        featuredOnLanding: false,
+        landingSort: 0,
+        tags: ['lamp', 'home', 'desk', 'lighting'],
+        createdAt: new Date('2026-04-01T12:00:00.000Z'),
+      },
+    ],
+  });
+
+  const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
+  const sampleHash = await bcrypt.hash(SAMPLE_PASSWORD, 12);
 
   await prisma.user.createMany({
     data: [
@@ -44,9 +186,9 @@ async function main() {
   await prisma.opsUser.createMany({
     data: [
       {
-        id: 'ops_tunde',
-        name: 'Tunde Balogun',
-        email: 'ops@connectport.ng',
+        id: 'ops_admin',
+        name: 'Korede',
+        email: ADMIN_EMAIL,
         role: 'admin',
       },
       {
@@ -62,23 +204,52 @@ async function main() {
     data: [
       {
         email: 'ada@example.com',
-        passwordHash,
+        passwordHash: sampleHash,
         kind: 'requester',
         userId: 'user_ada',
       },
       {
         email: 'kemi@shop.ng',
-        passwordHash,
+        passwordHash: sampleHash,
         kind: 'requester',
         userId: 'user_kemi',
       },
       {
-        email: 'ops@connectport.ng',
-        passwordHash,
+        email: ADMIN_EMAIL,
+        passwordHash: adminHash,
         kind: 'ops',
-        opsUserId: 'ops_tunde',
+        opsUserId: 'ops_admin',
+      },
+      {
+        email: 'chioma@connectport.ng',
+        passwordHash: sampleHash,
+        kind: 'ops',
+        opsUserId: 'ops_chioma',
       },
     ],
+  });
+
+  await prisma.team.create({
+    data: {
+      id: 'team_sourcing',
+      name: 'Sourcing desk',
+      members: {
+        create: [
+          { opsUserId: 'ops_admin' },
+          { opsUserId: 'ops_chioma' },
+        ],
+      },
+    },
+  });
+
+  await prisma.team.create({
+    data: {
+      id: 'team_logistics',
+      name: 'Logistics',
+      members: {
+        create: [{ opsUserId: 'ops_admin' }],
+      },
+    },
   });
 
   await prisma.request.createMany({
@@ -113,7 +284,7 @@ async function main() {
         qualityNotes: 'Heavy-duty, not household grade. CE mark preferred.',
         flexibility: 'exact',
         status: 'quoted',
-        assignedOpsUserId: 'ops_tunde',
+        assignedOpsUserId: 'ops_admin',
         createdAt: new Date('2026-09-02T14:40:00.000Z'),
       },
       {
@@ -144,7 +315,7 @@ async function main() {
         qualityNotes: 'Food-grade silicone, FDA docs if available.',
         flexibility: 'exact',
         status: 'delivered',
-        assignedOpsUserId: 'ops_tunde',
+        assignedOpsUserId: 'ops_admin',
         marketplaceEligible: true,
         createdAt: new Date('2026-07-20T09:30:00.000Z'),
       },
@@ -156,7 +327,7 @@ async function main() {
       {
         id: 'quote_1038_primary',
         requestId: 'req_quoted',
-        agentId: 'ops_tunde',
+        agentId: 'ops_admin',
         supplierRef:
           'https://www.alibaba.com/product-detail/commercial-gas-cooker.html',
         unitPrice: 58000,
@@ -173,7 +344,7 @@ async function main() {
       {
         id: 'quote_1038_alt',
         requestId: 'req_quoted',
-        agentId: 'ops_tunde',
+        agentId: 'ops_admin',
         supplierRef: 'https://detail.1688.com/offer/gas-range-alt.html',
         unitPrice: 51000,
         moq: 12,
@@ -205,7 +376,7 @@ async function main() {
       {
         id: 'quote_1004',
         requestId: 'req_delivered',
-        agentId: 'ops_tunde',
+        agentId: 'ops_admin',
         supplierRef: 'https://detail.1688.com/offer/example.html',
         unitPrice: 22000,
         moq: 20,
@@ -267,7 +438,7 @@ async function main() {
         requestId: 'req_quoted',
         status: 'quoted',
         note: 'Primary quote plus one close alternative.',
-        updatedBy: 'ops_tunde',
+        updatedBy: 'ops_admin',
         createdAt: new Date('2026-09-06T16:06:00.000Z'),
       },
       {
@@ -331,7 +502,7 @@ async function main() {
         requestId: 'req_delivered',
         status: 'quoted',
         note: 'Quote sent.',
-        updatedBy: 'ops_tunde',
+        updatedBy: 'ops_admin',
         createdAt: new Date('2026-07-28T13:00:00.000Z'),
       },
       {
@@ -347,7 +518,7 @@ async function main() {
         requestId: 'req_delivered',
         status: 'procured',
         note: 'Goods purchased.',
-        updatedBy: 'ops_tunde',
+        updatedBy: 'ops_admin',
         createdAt: new Date('2026-08-04T10:00:00.000Z'),
       },
       {
@@ -355,7 +526,7 @@ async function main() {
         requestId: 'req_delivered',
         status: 'in_transit_china_warehouse',
         note: 'At China warehouse.',
-        updatedBy: 'ops_tunde',
+        updatedBy: 'ops_admin',
         createdAt: new Date('2026-08-10T10:00:00.000Z'),
       },
       {
@@ -363,7 +534,7 @@ async function main() {
         requestId: 'req_delivered',
         status: 'in_transit_freight',
         note: 'On the water.',
-        updatedBy: 'ops_tunde',
+        updatedBy: 'ops_admin',
         createdAt: new Date('2026-08-12T10:00:00.000Z'),
       },
       {
@@ -371,7 +542,7 @@ async function main() {
         requestId: 'req_delivered',
         status: 'arrived_nigeria_warehouse',
         note: 'Cleared into Lagos warehouse.',
-        updatedBy: 'ops_tunde',
+        updatedBy: 'ops_admin',
         createdAt: new Date('2026-08-28T10:00:00.000Z'),
       },
       {
@@ -379,7 +550,7 @@ async function main() {
         requestId: 'req_delivered',
         status: 'delivered',
         note: 'Handed to the customer in Ikeja.',
-        updatedBy: 'ops_tunde',
+        updatedBy: 'ops_admin',
         createdAt: new Date('2026-08-30T14:20:00.000Z'),
       },
     ],

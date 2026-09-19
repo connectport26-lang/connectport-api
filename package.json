@@ -21,25 +21,35 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
+    "loadtest": "node scripts/load-test.mjs",
     "postinstall": "prisma generate"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1136.0",
+    "@nestjs/bullmq": "^12.0.0",
     "@nestjs/common": "^11.0.1",
-    "@nestjs/config": "^12.0.0",
+    "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
-    "@nestjs/jwt": "^12.0.1",
-    "@nestjs/passport": "^12.0.0",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/throttler": "^6.7.0",
     "@prisma/client": "^6.19.3",
+    "@types/cookie-parser": "^1.4.10",
     "bcrypt": "^6.0.0",
+    "bullmq": "^6.3.8",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "cookie-parser": "^1.4.7",
+    "helmet": "^8.3.0",
+    "ioredis": "^6.0.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
+    "resend": "^6.28.1",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {

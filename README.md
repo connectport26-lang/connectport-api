@@ -17,17 +17,22 @@ npx prisma db seed
 npm run start:dev
 ```
 
-Optional: `docker compose up -d` and point `DATABASE_URL` at `postgresql://connectport:connectport@localhost:5432/connectport`.
+Optional: `docker compose up -d` and point `DATABASE_URL` at `postgresql://connectport:connectport@localhost:5433/connectport`.
 
-API base URL: `http://localhost:3001/api`
+API base URL: `http://localhost:3005/api`
 
-## Demo accounts
+## Demo accounts (local seed only)
 
-All passwords: `password123`
+Set via env or defaults used by `prisma/seed.ts`:
 
-- Requester (individual): `ada@example.com`
-- Requester (business): `kemi@shop.ng`
-- Ops admin: `ops@connectport.ng`
+- `SEED_ADMIN_EMAIL` (default `admin@connectport.local`)
+- `SEED_ADMIN_PASSWORD` (default `connectport-dev-admin`)
+- `SEED_SAMPLE_PASSWORD` (default `connectport-sample`) for `ada@example.com` / `kemi@shop.ng`
+
+Ops agent: `chioma@connectport.ng` (same sample password).
+
+Never run seed against production (`NODE_ENV=production` is blocked).
+
 
 Send the JWT as `Authorization: Bearer <accessToken>`.
 
@@ -50,8 +55,22 @@ Send the JWT as `Authorization: Bearer <accessToken>`.
 | GET | `/api/me/requests` |
 | GET | `/api/me/requests/:id` |
 | POST | `/api/me/requests` |
+| POST | `/api/me/requests/guided` |
+| POST | `/api/me/request-uploads` |
 | POST | `/api/me/requests/:id/quotes/:quoteId/reject` |
 | POST | `/api/me/requests/:id/quotes/:quoteId/approve` |
+| POST | `/api/me/requests/:id/quotes/:quoteId/pay` | Demo checkout → `approved_paid` |
+
+## Catalog
+
+| Method | Path | Auth |
+|--------|------|------|
+| GET | `/api/products` | Public (`?q=` search) |
+| GET | `/api/products/:slugOrId` | Public |
+| GET | `/api/ops/products` | Ops |
+| POST | `/api/ops/products` | Ops |
+| PATCH | `/api/ops/products/:id` | Ops |
+| POST | `/api/ops/products/:id/publish` | Ops |
 
 ## Ops
 

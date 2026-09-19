@@ -1,5 +1,13 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsIn, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+  Length,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class SignupDto {
   @IsString()
@@ -16,11 +24,15 @@ export class SignupDto {
   phone: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   password: string;
 
   @IsIn(['individual', 'business'])
   accountType: 'individual' | 'business';
+
+  @IsOptional()
+  @IsString()
+  captchaToken?: string;
 }
 
 export class LoginDto {
@@ -29,6 +41,26 @@ export class LoginDto {
   email: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   password: string;
+
+  @IsOptional()
+  @IsString()
+  captchaToken?: string;
+}
+
+export class VerifySignupOtpDto {
+  @Transform(({ value }: { value: string }) => value.trim().toLowerCase())
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @Length(6, 6)
+  code: string;
+}
+
+export class ResendSignupOtpDto {
+  @Transform(({ value }: { value: string }) => value.trim().toLowerCase())
+  @IsEmail()
+  email: string;
 }

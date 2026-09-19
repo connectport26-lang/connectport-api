@@ -16,6 +16,9 @@ import {
 
 const SOURCE_TYPES = ['link', 'photo', 'text'] as const;
 const FLEXIBILITY = ['exact', 'flexible'] as const;
+const BUDGET_SCOPES = ['per_unit', 'total'] as const;
+const NEED_BY_KINDS = ['specific_date', 'timeframe', 'flexible'] as const;
+const REFERENCE_KINDS = ['link', 'image'] as const;
 const REQUEST_STATUSES = [
   'submitted',
   'quoted',
@@ -54,6 +57,65 @@ export class CreateRequestDto {
 
   @IsIn(FLEXIBILITY)
   flexibility: (typeof FLEXIBILITY)[number];
+}
+
+export class GuidedReferenceDto {
+  @IsIn(REFERENCE_KINDS)
+  kind: (typeof REFERENCE_KINDS)[number];
+
+  @IsString()
+  @MinLength(1)
+  value: string;
+}
+
+export class CreateGuidedRequestDto {
+  @IsString()
+  @MinLength(2)
+  productName: string;
+
+  @IsOptional()
+  @IsString()
+  productDescription?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GuidedReferenceDto)
+  references: GuidedReferenceDto[];
+
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  quantity: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsPositive()
+  budgetMax: number;
+
+  @IsIn(BUDGET_SCOPES)
+  budgetScope: (typeof BUDGET_SCOPES)[number];
+
+  @IsIn(NEED_BY_KINDS)
+  needByKind: (typeof NEED_BY_KINDS)[number];
+
+  @IsOptional()
+  @IsString()
+  needByDate?: string;
+
+  @IsOptional()
+  @IsString()
+  needByTimeframe?: string;
+
+  @IsOptional()
+  @IsString()
+  qualityNotes?: string;
+
+  @IsIn(FLEXIBILITY)
+  flexibility: (typeof FLEXIBILITY)[number];
+
+  @IsOptional()
+  @IsString()
+  preferredProductId?: string;
 }
 
 export class QuoteDraftDto {
@@ -118,4 +180,14 @@ export class RequestFiltersDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number;
 }

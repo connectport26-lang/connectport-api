@@ -36,8 +36,12 @@ export class OpsRequestsController {
   }
 
   @Post('requests/:id/assign')
-  assign(@Param('id') id: string, @Body() body: AssignRequestDto) {
-    return this.requests.assignRequest(id, body.opsUserId);
+  assign(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: AssignRequestDto,
+  ) {
+    return this.requests.assignRequest(id, body.opsUserId, user.sub);
   }
 
   @Post('requests/:id/quotes')

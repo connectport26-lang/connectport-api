@@ -5,6 +5,7 @@ import {
   Payment,
   Quote,
   Request,
+  RequestReference,
   StatusUpdate,
   User,
 } from '@prisma/client';
@@ -43,7 +44,7 @@ export function serializeOpsUser(opsUser: OpsUser) {
   };
 }
 
-export function serializeRequest(request: Request) {
+export function serializeRequest(request: Request & { references?: RequestReference[] }) {
   const payload: {
     id: string;
     reference: string;
@@ -59,6 +60,13 @@ export function serializeRequest(request: Request) {
     assignedOpsUserId: string | null;
     marketplaceEligible?: boolean;
     createdAt: string;
+    productName?: string | null;
+    productDescription?: string | null;
+    budgetScope?: Request['budgetScope'];
+    needByKind?: Request['needByKind'];
+    needByDate?: string | null;
+    needByTimeframe?: string | null;
+    references?: Array<{ id: string; kind: RequestReference['kind']; value: string; createdAt: string }>;
   } = {
     id: request.id,
     reference: request.reference,
@@ -77,6 +85,17 @@ export function serializeRequest(request: Request) {
 
   if (request.marketplaceEligible != null) {
     payload.marketplaceEligible = request.marketplaceEligible;
+  }
+  if (request.productName != null) {
+    payload.productName = request.productName;
+    payload.productDescription = request.productDescription;
+    payload.budgetScope = request.budgetScope;
+    payload.needByKind = request.needByKind;
+    payload.needByDate = request.needByDate?.toISOString() ?? null;
+    payload.needByTimeframe = request.needByTimeframe;
+    payload.references = request.references?.map((item) => ({
+      id: item.id, kind: item.kind, value: item.value, createdAt: item.createdAt.toISOString(),
+    })) ?? [];
   }
 
   return payload;
@@ -135,7 +154,7 @@ export function serializeNotification(notification: Notification) {
 }
 
 export function serializeRequestDetail(input: {
-  request: Request;
+  request: Request & { references?: RequestReference[] };
   user: User;
   quotes: Quote[];
   payment: Payment | null;

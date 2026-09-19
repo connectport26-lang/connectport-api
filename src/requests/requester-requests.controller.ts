@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { RequireRequester } from '../common/decorators/auth.decorators';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthUser } from '../common/types/auth-user';
-import { CreateRequestDto } from './dto/requests.dto';
+import { CreateGuidedRequestDto, CreateRequestDto } from './dto/requests.dto';
 import { RequestsService } from './requests.service';
 
 @Controller('me/requests')
@@ -25,6 +25,11 @@ export class RequesterRequestsController {
     return this.requests.createRequest(user.sub, body);
   }
 
+  @Post('guided')
+  createGuided(@CurrentUser() user: AuthUser, @Body() body: CreateGuidedRequestDto) {
+    return this.requests.createGuidedRequest(user.sub, body);
+  }
+
   @Post(':id/quotes/:quoteId/reject')
   reject(
     @CurrentUser() user: AuthUser,
@@ -41,5 +46,14 @@ export class RequesterRequestsController {
     @Param('quoteId') quoteId: string,
   ) {
     return this.requests.approveQuote(user.sub, id, quoteId);
+  }
+
+  @Post(':id/quotes/:quoteId/pay')
+  pay(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('quoteId') quoteId: string,
+  ) {
+    return this.requests.payQuote(user.sub, id, quoteId);
   }
 }

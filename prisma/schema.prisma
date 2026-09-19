@@ -23,6 +23,22 @@ enum Flexibility {
   flexible
 }
 
+enum BudgetScope {
+  per_unit
+  total
+}
+
+enum NeedByKind {
+  specific_date
+  timeframe
+  flexible
+}
+
+enum RequestReferenceKind {
+  link
+  image
+}
+
 enum RequestStatus {
   submitted
   quoted
@@ -67,6 +83,19 @@ enum CredentialKind {
   ops
 }
 
+enum ProductStatus {
+  draft
+  verified
+  published
+  archived
+}
+
+enum ProductAvailability {
+  in_stock
+  made_to_order
+  limited
+}
+
 model User {
   id          String      @id @default(cuid())
   name        String
@@ -86,6 +115,26 @@ model OpsUser {
   credential       Credential?
   assignedRequests Request[]
   quotes           Quote[]
+  teamMemberships  TeamMember[]
+}
+
+model Team {
+  id        String       @id @default(cuid())
+  name      String
+  createdAt DateTime     @default(now())
+  members   TeamMember[]
+  requests  Request[]
+}
+
+model TeamMember {
+  id        String  @id @default(cuid())
+  teamId    String
+  opsUserId String
+  team      Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  opsUser   OpsUser @relation(fields: [opsUserId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, opsUserId])
+  @@index([opsUserId])
 }
 
 model Credential {
@@ -93,10 +142,25 @@ model Credential {
   email        String         @unique
   passwordHash String
   kind         CredentialKind
+  tokenVersion Int            @default(0)
   userId       String?        @unique
   opsUserId    String?        @unique
   user         User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   opsUser      OpsUser?       @relation(fields: [opsUserId], references: [id], onDelete: Cascade)
+}
+
+model EmailOtp {
+  id           String   @id @default(cuid())
+  email        String
+  purpose      String
+  codeHash     String
+  payloadJson  String   @db.Text
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([email, purpose])
+  @@index([expiresAt])
 }
 
 model Request {
@@ -110,16 +174,42 @@ model Request {
   timeline            String
   qualityNotes        String            @db.Text
   flexibility         Flexibility
+  productName         String?
+  productDescription  String?           @db.Text
+  budgetScope         BudgetScope?
+  needByKind          NeedByKind?
+  needByDate          DateTime?
+  needByTimeframe     String?
   status              RequestStatus     @default(submitted)
   assignedOpsUserId   String?
+  teamId              String?
   marketplaceEligible Boolean?
   createdAt           DateTime          @default(now())
   user                User              @relation(fields: [userId], references: [id])
   assignedOpsUser     OpsUser?          @relation(fields: [assignedOpsUserId], references: [id])
+  team                Team?             @relation(fields: [teamId], references: [id])
   quotes              Quote[]
   payment             Payment?
   history             StatusUpdate[]
   notifications       Notification[]
+  references          RequestReference[]
+
+  @@index([teamId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([assignedOpsUserId])
+}
+
+model RequestReference {
+  id        String               @id @default(cuid())
+  requestId String
+  kind      RequestReferenceKind
+  value     String               @db.Text
+  createdAt DateTime             @default(now())
+  request   Request              @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
 }
 
 model Quote {
@@ -139,6 +229,9 @@ model Quote {
   createdAt       DateTime    @default(now())
   request         Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
   agent           OpsUser     @relation(fields: [agentId], references: [id])
+
+  @@index([requestId])
+  @@index([supplierRef])
 }
 
 model Payment {
@@ -146,7 +239,7 @@ model Payment {
   requestId  String          @unique
   amount     Decimal         @db.Decimal(14, 2)
   gateway    PaymentGateway
-  gatewayRef String
+  gatewayRef String          @unique
   status     PaymentStatus
   paidAt     DateTime?
   request    Request         @relation(fields: [requestId], references: [id], onDelete: Cascade)
@@ -160,6 +253,9 @@ model StatusUpdate {
   updatedBy String
   createdAt DateTime      @default(now())
   request   Request       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([createdAt])
 }
 
 model Notification {
@@ -169,4 +265,46 @@ model Notification {
   message   String
   createdAt DateTime            @default(now())
   request   Request             @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+}
+
+model Product {
+  id                     String              @id @default(cuid())
+  slug                   String              @unique
+  name                   String
+  description            String              @db.Text
+  imageUrl               String
+  unitPrice              Decimal             @db.Decimal(14, 2)
+  currency               String              @default("NGN")
+  moq                    Int
+  weightKg               Decimal             @db.Decimal(10, 3)
+  estimatedDeliveryDays  Int
+  availability           ProductAvailability @default(made_to_order)
+  status                 ProductStatus       @default(draft)
+  verified               Boolean             @default(false)
+  featuredOnLanding      Boolean             @default(false)
+  landingSort            Int                 @default(0)
+  tags                   String[]
+  sourceRequestId        String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  @@index([status])
+  @@index([featuredOnLanding, landingSort])
+}
+
+model OpsAuditLog {
+  id         String   @id @default(cuid())
+  opsUserId  String
+  action     String
+  entityType String
+  entityId   String
+  beforeJson String?  @db.Text
+  afterJson  String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([opsUserId])
+  @@index([entityId])
+  @@index([createdAt])
 }
