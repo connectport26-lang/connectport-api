@@ -18,7 +18,7 @@ const SOURCE_TYPES = ['link', 'photo', 'text'] as const;
 const FLEXIBILITY = ['exact', 'flexible'] as const;
 const BUDGET_SCOPES = ['per_unit', 'total'] as const;
 const NEED_BY_KINDS = ['specific_date', 'timeframe', 'flexible'] as const;
-const REFERENCE_KINDS = ['link', 'image'] as const;
+const REFERENCE_KINDS = ['link', 'image', 'video'] as const;
 const REQUEST_STATUSES = [
   'submitted',
   'quoted',

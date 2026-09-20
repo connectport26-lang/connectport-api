@@ -448,7 +448,10 @@ export class RequestsService {
     });
 
     const detail = this.toDetail(await this.requireDetail(createdId));
-    await this.emailStatusNotice(user, detail.request, 'quoted');
+    const quoteId =
+      detail.quotes.find((q) => q.status === 'sent')?.id ??
+      detail.quotes[0]?.id;
+    await this.emailStatusNotice(user, detail.request, 'quoted', { quoteId });
     return detail;
   }
 
@@ -932,11 +935,12 @@ export class RequestsService {
 
       return this.toDetail(await this.requireDetail(requestId, tx));
     }).then(async (detail) => {
-      await this.emailStatusNotice(
-        detail.user,
-        detail.request,
-        'quoted',
-      );
+      const quoteId =
+        detail.quotes.find((q) => q.status === 'sent')?.id ??
+        detail.quotes[0]?.id;
+      await this.emailStatusNotice(detail.user, detail.request, 'quoted', {
+        quoteId,
+      });
       return detail;
     });
   }
@@ -1369,6 +1373,7 @@ export class RequestsService {
       amountNgn?: number;
       cancelReason?: string;
       receiptPdf?: { filename: string; contentBase64: string };
+      quoteId?: string;
     },
   ) {
     const label = REQUESTER_STATUS_LABELS[status] ?? status;
@@ -1376,9 +1381,46 @@ export class RequestsService {
     const reference = request.reference;
     const context = buildRequestEmailContext(request);
     const isCatalog = request.channel === 'catalog';
-    const viewPath = isCatalog
-      ? `/orders/${request.id}`
-      : `/requests/${request.id}`;
+    const paidStatuses: RequestStatus[] = [
+      'approved_paid',
+      'procured',
+      'in_transit_china_warehouse',
+      'in_transit_freight',
+      'arrived_nigeria_warehouse',
+      'delivered',
+    ];
+
+    let quoteId = extras?.quoteId;
+    if (!quoteId && status === 'quoted') {
+      const quote = await this.prisma.quote.findFirst({
+        where: {
+          requestId: request.id,
+          status: { in: ['sent', 'accepted'] },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+      quoteId = quote?.id;
+    }
+
+    let ctaLabel: string;
+    let ctaPath: string;
+    if (status === 'cancelled') {
+      ctaLabel = 'Browse store';
+      ctaPath = '/store';
+    } else if (status === 'quoted') {
+      ctaLabel = isCatalog ? 'Pay now' : 'View quote';
+      ctaPath = quoteId ? `/quotes/${quoteId}` : `/requests/${request.id}`;
+    } else if (isCatalog && paidStatuses.includes(status)) {
+      ctaLabel = 'View order';
+      ctaPath = `/orders/${request.id}`;
+    } else if (isCatalog) {
+      ctaLabel = 'View request';
+      ctaPath = `/requests/${request.id}`;
+    } else {
+      ctaLabel = 'View request';
+      ctaPath = `/requests/${request.id}`;
+    }
 
     let receiptPdf = extras?.receiptPdf;
     if (
@@ -1470,17 +1512,8 @@ export class RequestsService {
       subject: selected.subject,
       headline: selected.headline,
       body: selected.body,
-      ctaLabel:
-        status === 'quoted'
-          ? isCatalog
-            ? 'Pay now'
-            : 'View quote'
-          : status === 'cancelled'
-            ? 'Browse store'
-            : isCatalog
-              ? 'View order'
-              : 'View request',
-      ctaPath: status === 'cancelled' ? '/store' : viewPath,
+      ctaLabel,
+      ctaPath,
       snippet: context.snippet,
       details: context.details,
       attachments: receiptPdf

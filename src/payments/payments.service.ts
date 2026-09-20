@@ -66,11 +66,7 @@ export class PaymentsService {
     const reference = `cp_${requestId.slice(-8)}_${quoteId.slice(-8)}_${Date.now()}`;
     const callbackUrl =
       this.config.get<string>('PAYSTACK_CALLBACK_URL')?.trim() ||
-      `${(this.config.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '')}${
-        detail.request.channel === 'catalog'
-          ? `/orders/${requestId}`
-          : `/quotes/${quoteId}`
-      }`;
+      `${(this.config.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '')}/quotes/${quoteId}`;
 
     const response = await fetch(
       'https://api.paystack.co/transaction/initialize',

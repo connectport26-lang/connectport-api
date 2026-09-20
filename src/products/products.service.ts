@@ -75,6 +75,7 @@ export class ProductsService {
         name: input.name.trim(),
         description: input.description.trim(),
         imageUrl: input.imageUrl.trim(),
+        media: this.normalizeMedia(input.media, input.imageUrl.trim()),
         unitPrice: input.unitPrice,
         moq: input.moq,
         weightKg: input.weightKg,
@@ -106,6 +107,14 @@ export class ProductsService {
           ? { description: input.description.trim() }
           : {}),
         ...(input.imageUrl != null ? { imageUrl: input.imageUrl.trim() } : {}),
+        ...(input.media != null
+          ? {
+              media: this.normalizeMedia(
+                input.media,
+                input.imageUrl?.trim() ?? existing.imageUrl,
+              ),
+            }
+          : {}),
         ...(input.unitPrice != null ? { unitPrice: input.unitPrice } : {}),
         ...(input.moq != null ? { moq: input.moq } : {}),
         ...(input.weightKg != null ? { weightKg: input.weightKg } : {}),
@@ -264,6 +273,11 @@ export class ProductsService {
     await this.redis.del(PUBLISHED_CACHE_KEY);
   }
 
+  /** Used by ops find approval when auto-publishing to the store. */
+  async clearPublishedCatalogCache() {
+    await this.invalidateCatalogCache();
+  }
+
   private async findMany(
     status?: ProductStatus,
     search?: string,
@@ -304,13 +318,49 @@ export class ProductsService {
     return rest;
   }
 
+  private normalizeMedia(
+    media: Array<{ kind: string; url: string }> | undefined,
+    coverUrl: string,
+  ): Array<{ kind: string; url: string }> {
+    const items = (media ?? [])
+      .map((m) => ({
+        kind: m.kind === 'video' ? 'video' : 'image',
+        url: m.url.trim(),
+      }))
+      .filter((m) => m.url.length > 0);
+    if (!items.some((m) => m.url === coverUrl)) {
+      items.unshift({ kind: 'image', url: coverUrl });
+    }
+    return items;
+  }
+
+  private parseMedia(raw: unknown): Array<{ kind: 'image' | 'video'; url: string }> {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter(
+        (item): item is { kind: string; url: string } =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          typeof (item as { url?: unknown }).url === 'string',
+      )
+      .map((item) => ({
+        kind: item.kind === 'video' ? ('video' as const) : ('image' as const),
+        url: item.url,
+      }));
+  }
+
   private serialize(product: Product) {
+    const media = this.parseMedia(product.media);
     return {
       id: product.id,
       slug: product.slug,
       name: product.name,
       description: product.description,
       imageUrl: product.imageUrl,
+      media:
+        media.length > 0
+          ? media
+          : [{ kind: 'image' as const, url: product.imageUrl }],
       unitPrice: Number(product.unitPrice),
       currency: product.currency as 'NGN',
       moq: product.moq,

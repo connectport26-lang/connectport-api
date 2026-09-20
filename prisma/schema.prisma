@@ -49,6 +49,7 @@ enum NeedByKind {
 enum RequestReferenceKind {
   link
   image
+  video
 }
 
 enum RequestStatus {
@@ -201,13 +202,17 @@ model ProductFind {
   agentId       String
   matchType     FindMatchType
   title         String
+  description   String         @default("") @db.Text
   notes         String         @db.Text
+  /// [{ "name": "Color", "options": ["Navy", "White"] }] or [{ "name": "None", "options": [] }]
+  variations    Json           @default("[]")
   supplierCost  Decimal        @db.Decimal(14, 2)
   weightKg      Decimal        @db.Decimal(10, 3)
   moq           Int
   leadTime      String
   status        FindStatus     @default(draft)
   quoteId       String?
+  productId     String?
   reviewedById  String?
   reviewedAt    DateTime?
   reviewNote    String?
@@ -221,6 +226,7 @@ model ProductFind {
   @@index([requestId])
   @@index([agentId])
   @@index([reviewedById])
+  @@index([productId])
 }
 
 model ProductFindMedia {
@@ -399,6 +405,8 @@ model Product {
   name                   String
   description            String              @db.Text
   imageUrl               String
+  /// Gallery: [{ "kind": "image"|"video", "url": string }]
+  media                  Json                 @default("[]")
   unitPrice              Decimal             @db.Decimal(14, 2)
   currency               String              @default("NGN")
   moq                    Int

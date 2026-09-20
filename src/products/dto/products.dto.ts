@@ -11,10 +11,21 @@ import {
   IsString,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 
 const STATUSES = ['draft', 'verified', 'published', 'archived'] as const;
 const AVAILABILITY = ['in_stock', 'made_to_order', 'limited'] as const;
+const MEDIA_KINDS = ['image', 'video'] as const;
+
+export class ProductMediaItemDto {
+  @IsIn(MEDIA_KINDS)
+  kind: (typeof MEDIA_KINDS)[number];
+
+  @IsString()
+  @MinLength(4)
+  url: string;
+}
 
 export class ProductQueryDto {
   @IsOptional()
@@ -48,6 +59,12 @@ export class CreateProductDto {
   @IsString()
   @MinLength(4)
   imageUrl: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductMediaItemDto)
+  media?: ProductMediaItemDto[];
 
   @Type(() => Number)
   @IsNumber()
@@ -115,6 +132,12 @@ export class UpdateProductDto {
   @IsString()
   @MinLength(4)
   imageUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductMediaItemDto)
+  media?: ProductMediaItemDto[];
 
   @IsOptional()
   @Type(() => Number)

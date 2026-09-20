@@ -27,6 +27,7 @@ import {
   UpdateRoleDto,
 } from './dto/ops-console.dto';
 import { OpsNotifyService } from '../notifications/ops-notify.service';
+import { ProductsService } from '../products/products.service';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -37,6 +38,7 @@ export class OpsConsoleService {
     private readonly mailQueue: MailQueueService,
     private readonly config: ConfigService,
     private readonly opsNotify: OpsNotifyService,
+    private readonly products: ProductsService,
   ) {}
 
   listCustomers(search?: string) {
@@ -506,6 +508,21 @@ export class OpsConsoleService {
       throw new BadRequestException('MOQ must be at least 1.');
     }
 
+    const description = (input.description ?? '').trim();
+    const variations = this.normalizeVariations(input.variations);
+    if (input.submitForReview) {
+      this.assertFindChecklist({
+        title: input.title,
+        description,
+        media: input.media,
+        variations,
+        supplierCost: input.supplierCost,
+        weightKg: input.weightKg,
+        moq: input.moq,
+        leadTime: input.leadTime,
+      });
+    }
+
     const config = await this.getLandingConfig();
     const landing = calculateLandingPrice({
       supplierCost: input.supplierCost,
@@ -521,7 +538,9 @@ export class OpsConsoleService {
         agentId,
         matchType: input.matchType,
         title: input.title.trim(),
+        description,
         notes: input.notes?.trim() ?? '',
+        variations,
         supplierCost: input.supplierCost,
         weightKg: input.weightKg,
         moq: input.moq,
@@ -577,6 +596,18 @@ export class OpsConsoleService {
       throw new BadRequestException('Only finds pending review can be approved.');
     }
 
+    const variations = this.parseVariations(find.variations);
+    this.assertFindChecklist({
+      title: find.title,
+      description: find.description,
+      media: find.media,
+      variations,
+      supplierCost: Number(find.supplierCost),
+      weightKg: Number(find.weightKg),
+      moq: find.moq,
+      leadTime: find.leadTime,
+    });
+
     const request = find.request;
     const config = await this.getLandingConfig();
     const landing = calculateLandingPrice({
@@ -585,6 +616,56 @@ export class OpsConsoleService {
       weightKgPerUnit: Number(find.weightKg),
       config,
     });
+
+    const cover =
+      find.media.find((m) => m.kind === 'image')?.url ?? find.media[0]?.url;
+    if (!cover) {
+      throw new BadRequestException('Find needs at least one image to publish.');
+    }
+
+    const productMedia = find.media.map((m) => ({
+      kind: m.kind === 'video' ? ('video' as const) : ('image' as const),
+      url: m.url,
+    }));
+
+    const slugBase = this.slugify(find.title) || 'product';
+    let slug = `${slugBase}-${find.id.slice(-6)}`;
+    const existingSlug = await this.prisma.product.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (existingSlug) {
+      slug = `${slugBase}-${Date.now().toString(36)}`;
+    }
+
+    const deliveryDays = this.estimateDeliveryDays(find.leadTime);
+    const variationTags = variations
+      .filter((v) => v.name.toLowerCase() !== 'none')
+      .flatMap((v) => [v.name.toLowerCase(), ...v.options.map((o) => o.toLowerCase())])
+      .filter(Boolean)
+      .slice(0, 12);
+
+    const product = await this.prisma.product.create({
+      data: {
+        slug,
+        name: find.title.trim(),
+        description:
+          find.description.trim() ||
+          `${find.title.trim()}. Sourced via ConnectPort.`,
+        imageUrl: cover,
+        media: productMedia,
+        unitPrice: landing.unitPrice,
+        moq: find.moq,
+        weightKg: Number(find.weightKg),
+        estimatedDeliveryDays: deliveryDays,
+        availability: 'made_to_order',
+        status: 'published',
+        verified: true,
+        tags: variationTags,
+        sourceRequestId: requestId,
+      },
+    });
+    await this.products.clearPublishedCatalogCache();
 
     const quote = await this.prisma.quote.create({
       data: {
@@ -607,6 +688,7 @@ export class OpsConsoleService {
       where: { id: find.id },
       data: {
         quoteId: quote.id,
+        productId: product.id,
         status: 'sent',
         reviewedById: reviewerId,
         reviewedAt: new Date(),
@@ -673,6 +755,7 @@ export class OpsConsoleService {
     return {
       find: this.serializeFind(updated),
       quoteId: quote.id,
+      productId: product.id,
       landingPreview: landing,
     };
   }
@@ -812,13 +895,16 @@ export class OpsConsoleService {
     agentId: string;
     matchType: string;
     title: string;
+    description?: string | null;
     notes: string;
+    variations?: unknown;
     supplierCost: { toString(): string } | number;
     weightKg: { toString(): string } | number;
     moq: number;
     leadTime: string;
     status: string;
     quoteId: string | null;
+    productId?: string | null;
     reviewedById?: string | null;
     reviewedAt?: Date | null;
     reviewNote?: string | null;
@@ -834,13 +920,16 @@ export class OpsConsoleService {
       agentName: find.agent?.name ?? '',
       matchType: find.matchType,
       title: find.title,
+      description: find.description ?? '',
       notes: find.notes,
+      variations: this.parseVariations(find.variations),
       supplierCost: Number(find.supplierCost),
       weightKg: Number(find.weightKg),
       moq: find.moq,
       leadTime: find.leadTime,
       status: find.status,
       quoteId: find.quoteId,
+      productId: find.productId ?? null,
       reviewedById: find.reviewedById ?? null,
       reviewedByName: find.reviewedBy?.name ?? null,
       reviewedAt: find.reviewedAt ? find.reviewedAt.toISOString() : null,
@@ -848,6 +937,90 @@ export class OpsConsoleService {
       createdAt: find.createdAt.toISOString(),
       media: find.media,
     };
+  }
+
+  private normalizeVariations(
+    input?: Array<{ name: string; options: string[] }>,
+  ): Array<{ name: string; options: string[] }> {
+    if (!input?.length) return [];
+    return input
+      .map((row) => ({
+        name: row.name.trim(),
+        options: (row.options ?? []).map((o) => o.trim()).filter(Boolean),
+      }))
+      .filter((row) => row.name.length > 0);
+  }
+
+  private parseVariations(
+    raw: unknown,
+  ): Array<{ name: string; options: string[] }> {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter(
+        (item): item is { name: string; options?: string[] } =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          typeof (item as { name?: unknown }).name === 'string',
+      )
+      .map((item) => ({
+        name: item.name,
+        options: Array.isArray(item.options)
+          ? item.options.filter((o): o is string => typeof o === 'string')
+          : [],
+      }));
+  }
+
+  private assertFindChecklist(input: {
+    title: string;
+    description: string;
+    media: Array<{ kind: string; url: string }>;
+    variations: Array<{ name: string; options: string[] }>;
+    supplierCost: number;
+    weightKg: number;
+    moq: number;
+    leadTime: string;
+  }) {
+    const images = input.media.filter((m) => m.kind === 'image');
+    const videos = input.media.filter((m) => m.kind === 'video');
+    if (input.title.trim().length < 2) {
+      throw new BadRequestException('Product title is required.');
+    }
+    if (input.description.trim().length < 40) {
+      throw new BadRequestException(
+        'Customer-facing description must be at least 40 characters.',
+      );
+    }
+    if (!input.supplierCost || input.supplierCost <= 0) {
+      throw new BadRequestException('Supplier cost is required.');
+    }
+    if (!input.weightKg || input.weightKg <= 0) {
+      throw new BadRequestException('Weight per unit is required.');
+    }
+    if (input.moq < 1) {
+      throw new BadRequestException('MOQ must be at least 1.');
+    }
+    if (!input.leadTime.trim()) {
+      throw new BadRequestException('Lead time is required.');
+    }
+    if (images.length < 2) {
+      throw new BadRequestException('Upload at least 2 product photos.');
+    }
+    if (videos.length < 1) {
+      throw new BadRequestException('Upload at least 1 product video.');
+    }
+    if (input.variations.length < 1) {
+      throw new BadRequestException(
+        'Add variations (or an explicit "None" row).',
+      );
+    }
+  }
+
+  private estimateDeliveryDays(leadTime: string) {
+    const match = leadTime.match(/(\d+)/);
+    if (!match) return 21;
+    const n = Number(match[1]);
+    if (!Number.isFinite(n) || n < 1) return 21;
+    return Math.min(Math.max(Math.round(n), 1), 120);
   }
 
   private generateTempPassword() {
@@ -860,6 +1033,6 @@ export class OpsConsoleService {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
-      .slice(0, 48);
+      .slice(0, 60);
   }
 }

@@ -113,6 +113,48 @@ export class UploadsService {
     return this.storeBinary(file, sniffed, 'requests');
   }
 
+  /** Images or short videos for buyer request references. */
+  async storeRequestMedia(
+    file: UploadFile,
+  ): Promise<{ url: string; kind: 'image' | 'video' }> {
+    const image = sniffImage(file.buffer);
+    if (image) {
+      const stored = await this.storeBinary(file, image, 'requests');
+      return { url: stored.url, kind: 'image' };
+    }
+
+    const video = sniffVideo(file);
+    if (!video) {
+      throw new Error(
+        'Upload a JPEG, PNG, WebP, GIF, MP4, or WebM under the size limit.',
+      );
+    }
+
+    const stored = await this.storeBinary(file, video, 'requests');
+    return { url: stored.url, kind: 'video' };
+  }
+
+  /** Images or short videos for catalog products. */
+  async storeProductMedia(
+    file: UploadFile,
+  ): Promise<{ url: string; kind: 'image' | 'video' }> {
+    const image = sniffImage(file.buffer);
+    if (image) {
+      const stored = await this.storeBinary(file, image, 'products');
+      return { url: stored.url, kind: 'image' };
+    }
+
+    const video = sniffVideo(file);
+    if (!video) {
+      throw new Error(
+        'Upload a JPEG, PNG, WebP, GIF, MP4, or WebM under the size limit.',
+      );
+    }
+
+    const stored = await this.storeBinary(file, video, 'products');
+    return { url: stored.url, kind: 'video' };
+  }
+
   /** Images or short videos for sourcing finds (mp4/webm/quicktime). */
   async storeFindMedia(file: UploadFile): Promise<{ url: string; kind: 'image' | 'video' }> {
     const image = sniffImage(file.buffer);

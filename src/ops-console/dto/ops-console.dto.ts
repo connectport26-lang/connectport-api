@@ -181,6 +181,16 @@ export class FindMediaDto {
   url: string;
 }
 
+export class FindVariationDto {
+  @IsString()
+  @MinLength(1)
+  name: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  options: string[];
+}
+
 export class CreateProductFindDto {
   @IsIn(MATCH_TYPES)
   matchType: (typeof MATCH_TYPES)[number];
@@ -191,7 +201,17 @@ export class CreateProductFindDto {
 
   @IsOptional()
   @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FindVariationDto)
+  variations?: FindVariationDto[];
 
   @Type(() => Number)
   @IsNumber()

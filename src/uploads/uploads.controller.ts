@@ -19,8 +19,13 @@ const allowedTypes = new Set([
   'image/png',
   'image/webp',
   'image/gif',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
 ]);
 
+const IMAGE_MAX = 2 * 1024 * 1024;
+const VIDEO_MAX = 25 * 1024 * 1024;
 const DAILY_UPLOAD_CAP = 40;
 
 @Controller('me/request-uploads')
@@ -36,7 +41,7 @@ export class UploadsController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
-      limits: { fileSize: 2 * 1024 * 1024 },
+      limits: { fileSize: VIDEO_MAX },
       fileFilter: (_request, file, callback) => {
         const type = (file.mimetype || '').toLowerCase();
         const name = (file.originalname || '').toLowerCase();
@@ -70,8 +75,17 @@ export class UploadsController {
         );
       }
       throw new BadRequestException(
-        'Upload a JPEG, PNG, WebP, or GIF under 2 MB.',
+        'Upload a JPEG, PNG, WebP, GIF, MP4, or WebM (images under 2 MB, video under 25 MB).',
       );
+    }
+
+    const type = (file.mimetype || '').toLowerCase();
+    const isVideo = type.startsWith('video/');
+    if (!isVideo && file.buffer.length > IMAGE_MAX) {
+      throw new BadRequestException('Images must be under 2 MB.');
+    }
+    if (isVideo && file.buffer.length > VIDEO_MAX) {
+      throw new BadRequestException('Videos must be under 25 MB.');
     }
 
     const day = new Date().toISOString().slice(0, 10);
@@ -84,7 +98,7 @@ export class UploadsController {
     }
 
     try {
-      const result = await this.uploads.storeImage(file);
+      const result = await this.uploads.storeRequestMedia(file);
       await this.redis.incr(key, 60 * 60 * 24);
       return result;
     } catch (err) {
@@ -92,7 +106,7 @@ export class UploadsController {
       throw new BadRequestException(
         err instanceof Error
           ? err.message
-          : 'Could not store that image. Try JPEG or PNG under 2 MB.',
+          : 'Could not store that file. Try JPEG, PNG, or MP4 under the size limit.',
       );
     }
   }
